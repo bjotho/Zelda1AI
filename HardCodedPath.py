@@ -8,33 +8,33 @@ env = JoypadSpace(env, MOVEMENT)
 stop_after_a = 0
 a = []
 # for i in range(91):
-#     a.append(4)
+#     a.append(3)
 # for i in range(300):
 #     a.append(0)
 # for i in range(179):
-#     a.append(8)
+#     a.append(4)
 # for i in range(300):
 #     a.append(0)
 # for i in range(91):
-#     a.append(4)
+#     a.append(3)
 # for i in range(65):
-#     a.append(12)
+#     a.append(5)
 
 for i in range(45):
-    a.append(8)
+    a.append(4)
 for i in range(165):
-    a.append(12)
+    a.append(5)
 for i in range(10):
-    a.append(4)
+    a.append(3)
 for i in range(225):
-    a.append(16)
+    a.append(6)
 for i in range(40):
-    a.append(4)
+    a.append(3)
 for i in range(80):
-    a.append(12)
+    a.append(5)
 
-circle = [4,16,8,12]
-spin_attack = [5,0,0,0,0,0,0,0,0,0,0,17,0,0,0,0,0,0,0,0,0,0,9,0,0,0,0,0,0,0,0,0,0,13,0,0,0,0,0,0,0,0,0,0]
+circle = [3,6,4,5]
+spin_attack = [3,0,0,0,0,1,0,0,0,0,0,6,0,0,0,0,1,0,0,0,0,0,4,0,0,0,0,1,0,0,0,0,0,5,0,0,0,0,1,0,0,0,0,0]
 after_kill = []
 for i in range(5):
     for direction in circle:
@@ -60,8 +60,7 @@ for step in range(3000):
     else:
         state, reward, done, info = env.step(spin_attack[step%len(spin_attack)])
         kill_step = step
-    # print("Memory testing:", info['y_pos'])
-    if abs(reward) >= 3:
+    if abs(reward) >= 15:
         print("Reward:", "%.2f" % reward, "+", "%.2f" % total_reward, "-->", "%.2f" % (total_reward + reward))
     total_reward += reward
     env.render()

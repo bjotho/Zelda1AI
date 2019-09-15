@@ -4,6 +4,7 @@ from gym_zelda_1.actions import MOVEMENT
 import numpy as np
 from random import randint
 
+
 def read_NES_palette():
     palette = []
     with open("NES_Palette.txt", 'r') as f:
@@ -17,8 +18,14 @@ def read_NES_palette():
     return palette
 
 
-def step_function(z):
-    return 1 if z >= 0.5 else 0
+def get_discrete_state(state):
+    x_i = state[0] // 16
+    y_i = (state[1] - 61) // 16
+    if x_i == 15:
+        x_i -= 1
+    if y_i == 10:
+        y_i -= 1
+    return tuple((x_i, y_i))
 
 
 def model_output(input):
@@ -119,11 +126,11 @@ env = JoypadSpace(env, MOVEMENT)
 # model = None
 # build_model()
 # The area where Link's _x_pixel can be is approximately 240*160 pixels (x:0-240, y:61-221).
-# This maps to a (10, 15) matrix.
-DISCRETE_OS_SIZE = [10,15] 
-# Q = np.random.uniform(low=-15, high=15, size=([DISCRETE_OS_SIZE] + [env.action_space.n]))
-print(DISCRETE_OS_SIZE)
-'''
+# If we divide these dimensions by 16, we get a (15, 10) matrix For each position Link can be in,
+# he can perform 20 distinct actions. Therefore, the Q matrix will have the dimensions [10,15,20].
+Q = np.random.uniform(low=-15, high=15, size=([15,10,7]))
+# print(Q)
+
 get_sword = 0
 state = env.reset()
 
@@ -153,41 +160,51 @@ if get_sword:
         env.render()
     print("Agent taking over")
 
-timesteps = 25000
 LEARNING_RATE = 0.1
 DISCOUNT = 0.95
+EPISODES = 20000
 epsilon = 0.5
 START_EPSILON_DECAYING = 1
-END_EPSILON_DECAYING = timesteps // 2
-epsilon_decay_value = epsilon/(END_EPSILON_DECAYING - START_EPSILON_DECAYING)
-total_reward = 0
-t = 0
-observation = model_output(state)
-done = False
-while not done:
-    if np.random.random() > epsilon:
-        action = np.argmax(Q[observation])
-    else:
-        action = env.action_space.sample()
-    new_state, reward, done, info = env.step(action)
-    new_observation = model_output(new_state)
-    env.render()
-    if not done:
-        max_future_Q = np.max(Q[new_observation])
-        current_Q = Q[observation][action]
-        new_Q = (1 - LEARNING_RATE) * current_Q + LEARNING_RATE * (reward + DISCOUNT * max_future_Q)
-        Q[observation][action] = new_Q
-    observation = new_observation
+END_EPSILON_DECAYING = EPISODES // 2
+epsilon_decay_value = epsilon / (END_EPSILON_DECAYING - START_EPSILON_DECAYING)
+for ep in range(EPISODES):
+    min_reward = 15
+    max_reward = -15
+    t = 0
+    state = env.reset()
+    done = False
+    state, reward, done, info = env.step(0)
+    discrete_state = get_discrete_state((info['x_pos'], info['y_pos']))
+    while not done:
+        if np.random.random() < epsilon:
+            action = env.action_space.sample()
+        else:
+            action = np.argmin(Q[get_discrete_state((info['x_pos'], info['y_pos']))])
+        new_state, reward, done, info = env.step(action)
+        new_discrete_state = get_discrete_state((info['x_pos'], info['y_pos']))
+        if ep % 1 == 0:
+            env.render()
+        if not done:
+            max_future_Q = np.max(Q[new_discrete_state[0]][new_discrete_state[1]])
+            current_Q = Q[discrete_state[0]][discrete_state[1]][action]
+            new_Q = (1 - LEARNING_RATE) * current_Q + LEARNING_RATE * (reward + DISCOUNT * max_future_Q)
+            Q[discrete_state[0]][discrete_state[1]][action] = new_Q
+        discrete_state = new_discrete_state
+        if reward < min_reward:
+            min_reward = reward
+        if reward > max_reward:
+            max_reward = reward
+        t += 1
     if END_EPSILON_DECAYING >= t >= START_EPSILON_DECAYING:
         epsilon -= epsilon_decay_value
-    # print(info['game_paused'])
-    if abs(reward) >= 1:
-        print("Reward:", "%.2f" % reward, "+", "%.2f" % total_reward, "-->", "%.2f" % (total_reward + reward))
-    total_reward += reward
-    t += 1
+    print("Episode:", ep+1, "\tmin_reward:", "%.2f" % min_reward, "\tmax_reward:", "%.2f" % max_reward, "\ttarget distance:", "%.2f" % info['target_distance'], "\tepsilon:", "%.2f" % epsilon)
 env.close()
 
+for i in Q:
+    for j in i:
+        print(j)
 
+'''
 timesteps = 10000
 # eta = .628
 # gamma = .9
