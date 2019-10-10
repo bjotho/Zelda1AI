@@ -5,33 +5,50 @@ from gym_zelda_1.actions import MOVEMENT
 env = gym_zelda_1.make('Zelda1-v0')
 env = JoypadSpace(env, MOVEMENT)
 
-stop_after_a = 0
+stop_after_a = 1
 a = []
-# for i in range(91):
-#     a.append(3)
-# for i in range(300):
-#     a.append(0)
-# for i in range(179):
-#     a.append(4)
-# for i in range(300):
-#     a.append(0)
-# for i in range(91):
-#     a.append(3)
-# for i in range(65):
-#     a.append(5)
-
+for i in range(30):
+    a.append(5)     # up
 for i in range(45):
-    a.append(4)
-for i in range(165):
-    a.append(5)
-for i in range(10):
-    a.append(3)
-for i in range(225):
-    a.append(6)
-for i in range(40):
-    a.append(3)
-for i in range(80):
-    a.append(5)
+    a.append(4)     # left
+for i in range(150):
+    a.append(5)     # up
+for i in range(70):
+    a.append(4)     # left
+for i in range(35):
+    a.append(5)     # up
+for i in range(30):
+    a.append(4)     # left
+
+# Go to level 1 from beginning.
+# for i in range(45):
+#     a.append(4)     # left
+# for i in range(165):
+#     a.append(5)     # up
+# for i in range(10):
+#     a.append(3)     # right
+# for i in range(225):
+#     a.append(6)     # down
+# for i in range(40):
+#     a.append(3)     # right
+# for i in range(75):
+#     a.append(5)     # up
+# for i in range(120):
+#     a.append(3)     # right
+# for i in range(50):
+#     a.append(5)     # up
+# for i in range(80):
+#     a.append(3)     # right
+# for i in range(210):
+#     a.append(5)     # up
+# for i in range(15):
+#     a.append(4)     # left
+# for i in range(120):
+#     a.append(5)     # up
+# for i in range(200):
+#     a.append(4)     # left
+# for i in range(20):
+#     a.append(5)     # up
 
 circle = [3,6,4,5]
 spin_attack = [3,0,0,0,0,1,0,0,0,0,0,6,0,0,0,0,1,0,0,0,0,0,4,0,0,0,0,1,0,0,0,0,0,5,0,0,0,0,1,0,0,0,0,0]
@@ -46,7 +63,8 @@ for i in range(5):
 
 done = True
 total_reward = 0
-for step in range(3000):
+memory_testing_last = 119
+for step in range(10000):
     if done:
         state = env.reset()
     if step < len(a)-1:
@@ -60,8 +78,11 @@ for step in range(3000):
     else:
         state, reward, done, info = env.step(spin_attack[step%len(spin_attack)])
         kill_step = step
-    if abs(reward) >= 15:
-        print("Reward:", "%.2f" % reward, "+", "%.2f" % total_reward, "-->", "%.2f" % (total_reward + reward))
+    # if info['memory_testing'] != memory_testing_last:
+    print("memory testing:", info['memory_testing'], "(", info['x_pos'], ",", info['y_pos'], ")")
+    # memory_testing_last = info['memory_testing']
+    # if abs(reward) >= 15:
+    #     print("Reward:", "%.2f" % reward, "+", "%.2f" % total_reward, "-->", "%.2f" % (total_reward + reward))
     total_reward += reward
     env.render()
 

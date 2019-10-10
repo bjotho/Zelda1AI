@@ -1,0 +1,60 @@
+
+Hvordan kan vi inarbeide reward i nettverket?
+
+	https://github.com/Kautenja/nes-py/wiki/Creating-Environments
+
+Hvordan designe reward funksjonen? (eks. reward for å oppdage nye brett?)
+
+Kan vi bruke Q-learning/Q-matrix?
+
+Hvordan er det best å designe CNN?
+
+Hvor mange filtre bør vi ha?
+
+Er observation_space lik høyde * bredde * 3 (RGB kanaler) = 240 * 256 * 3 = 184 320?
+Eller høyde * bredde * 3 (RGB kanaler) * 255 = 47 001 600
+
+Kan vi begrense observation_space hvis vi vet at enkelte deler er urelevante?
+
+Kan vi lage "states" agenten kan være i (ie. exploration, attack, withraw etc.),
+og evt. begrense action_space?
+evt. state-spesifik Q-matrix (og/eller CNN)?
+
+Kan vi legge inn relevant debugging info (fra env.step) i NN etter convolutional layers?
+
+Hvordan best begrense observation_space -> descrete observation_space?
+
+Output fra CNN -> discrete observation_space? Optimal CNN output size?
+
+Kan vi begrense fargepalett til kun fargene som finnes i spillet?
+
+	http://www.thealmightyguru.com/Games/Hacking/Wiki/index.php?title=NES_Palette
+	https://www.zeldaclassic.com/wiki/index.php/Palette
+
+Kan vi begrense fargepaletten videre ut ifra om Link er i overworld, dungeon etc.?
+
+Bør vi ha en time_penalty?
+
+I zelda_env.py, kan vi få tak i last_action?
+
+Hvordan knytte sammen CNN og Q-Learning systemet?
+
+	https://www.practicalai.io/teaching-a-neural-network-to-play-a-game-with-q-learning/
+
+Hvordan sjekke om man er i pause menyen / hvordan sjekke hvilken "map square" man er på?
+
+hvordan hente ut RAM-verdier fra nes_env i zelda_env?
+
+  .-----------------------------------------------------------------------------.
+  |	https://datacrystal.romhacking.net/wiki/The_Legend_of_Zelda:RAM_map	|
+  '-----------------------------------------------------------------------------'
+
+	https://www.nesmaps.com/maps/Zelda/ZeldaOverworldQ2.html
+
+loitering_penalty: increase exponentially with time?
+
+YOLO classification of map square --> derive target location --> reward = -dist(target, Link)
+
+Pathfinding algorithm? --> A* (or aleph*)
+
+
