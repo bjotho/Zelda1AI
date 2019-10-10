@@ -93,6 +93,12 @@ RING_TYPES = collections.defaultdict(lambda: None, {
     0x02: "Red Ring",
 })
 
+# The type of objective currently assigned
+OBJECTIVE_TYPE = collections.defaultdict(lambda: None, {
+    0: "Get to location",
+    1: "Kill enemies"
+})
+
 
 class Zelda1Env(NESEnv):
     """An environment for playing The Legend of Zelda with OpenAI Gym."""
@@ -103,26 +109,36 @@ class Zelda1Env(NESEnv):
     def __init__(self):
         """Initialize a new Zelda 1 environment."""
         super().__init__(ROM_PATH)
-        # Memory testing.
-        self._memory_testing_last = None
         # Define the current objective.
         self._objective = 0
         # Define maximum number of steps for each objective before the environment resets.
-        self._max_steps_per_objective = 500
+        self._max_steps_per_objective = 1000
+        self._done_after_objectives_completed = True
+        self._start_in_level_1 = False
+        self._give_rewards = False
+
         # Define list containing tuples representing objective locations and goals.
-        # (_x_pixel, _y_pixel, _map_location, goal). (goal = -1 means get to the specified location).
-        self._objective_list = [(64,77,119,0),(121,149,119,SWORD_TYPES[1]),(121,221,119,1),(120,61,119,103)]
-        # List containing properties to check against goals set in _objective_list.
-        self._objective_goals = ["self._song_type_currently_active","self._sword","self._song_type_currently_active","self._map_location"]
+        # (OBJECTIVE_TYPE, _x_pixel, _y_pixel, _map_location, goal). (goal = -1 means get to the specified location).
+        # Also define list containing properties to check against goals set in _objective_list.
+        if self._start_in_level_1:
+            self._objective_list = [(OBJECTIVE_TYPE[0],0,141,115,114), (OBJECTIVE_TYPE[1],114,3), (OBJECTIVE_TYPE[0],152,182,114,1), (OBJECTIVE_TYPE[0],224,141,114,115)]
+            self._objective_goals = ["self._map_location", "self._killed_enemy_count", "self._number_of_keys"]
+        else:
+            # self._objective_list = [(OBJECTIVE_TYPE[0],64,77,119,0), (OBJECTIVE_TYPE[0],121,149,119,SWORD_TYPES[1]), (OBJECTIVE_TYPE[0],121,221,119,1), (OBJECTIVE_TYPE[0],120,61,119,103), (OBJECTIVE_TYPE[0],240,140,103,104)]
+            # self._objective_goals = ["self._song_type_currently_active", "self._sword", "self._song_type_currently_active", "self._map_location", "self._map_location"]
+            self._objective_list = [(OBJECTIVE_TYPE[0],255,141,119,120), (OBJECTIVE_TYPE[0],40,64,120,110)]
+            self._objective_goals = ["self._map_location", "self._map_location"]
+        self._map_location_last = 119
         self._health_last = 3.
         self._rupees_last = 0
         self._killed_enemy_count_last = 0
+        self._closest_enemy_distance_last = 0
         self._x_pixel_last = 0
         self._y_pixel_last = 0
         self._target_distance_last = 0
         self._sword_last = SWORD_TYPES[0]
         # Define an offset for the split between the menu and the game screen.
-        self._y_offset = 61
+        self._y_offset = 64
         self._loitering_period = 0
         # Counter to keep track of number of steps in the current episode.
         self._steps = 0
@@ -140,7 +156,7 @@ class Zelda1Env(NESEnv):
     @property
     def _memory_testing(self):
         """Return value of the specified RAM address."""
-        return self.ram[0x0609]
+        return self.ram[0x0621]
 
     @property
     def _is_screen_scrolling(self):
@@ -168,9 +184,69 @@ class Zelda1Env(NESEnv):
         return self.ram[0x70]
 
     @property
+    def _enemy_1_x_pixel(self):
+        """Return the current x pixel of enemy 1's location."""
+        return self.ram[0x71]
+
+    @property
+    def _enemy_2_x_pixel(self):
+        """Return the current x pixel of enemy 2's location."""
+        return self.ram[0x72]
+
+    @property
+    def _enemy_3_x_pixel(self):
+        """Return the current x pixel of enemy 3's location."""
+        return self.ram[0x73]
+
+    @property
+    def _enemy_4_x_pixel(self):
+        """Return the current x pixel of enemy 4's location."""
+        return self.ram[0x74]
+
+    @property
+    def _enemy_5_x_pixel(self):
+        """Return the current x pixel of enemy 5's location."""
+        return self.ram[0x75]
+
+    @property
+    def _enemy_6_x_pixel(self):
+        """Return the current x pixel of enemy 6's location."""
+        return self.ram[0x76]
+
+    @property
     def _y_pixel(self):
         """Return the current y pixel of Link's location."""
         return self.ram[0x84]
+
+    @property
+    def _enemy_1_y_pixel(self):
+        """Return the current y pixel of enemy 1's location."""
+        return self.ram[0x85]
+
+    @property
+    def _enemy_2_y_pixel(self):
+        """Return the current y pixel of enemy 2's location."""
+        return self.ram[0x86]
+
+    @property
+    def _enemy_3_y_pixel(self):
+        """Return the current y pixel of enemy 3's location."""
+        return self.ram[0x87]
+
+    @property
+    def _enemy_4_y_pixel(self):
+        """Return the current y pixel of enemy 4's location."""
+        return self.ram[0x88]
+
+    @property
+    def _enemy_5_y_pixel(self):
+        """Return the current y pixel of enemy 5's location."""
+        return self.ram[0x89]
+
+    @property
+    def _enemy_6_y_pixel(self):
+        """Return the current y pixel of enemy 6's location."""
+        return self.ram[0x8A]
 
     @property
     def _direction(self):
@@ -317,6 +393,11 @@ class Zelda1Env(NESEnv):
         return bool(self.ram[0x0666])
 
     @property
+    def _number_of_keys(self):
+        """Return the number of keys in Link's inventory."""
+        return self.ram[0x66E]
+
+    @property
     def _compass(self):
         """Return the mapping of which compasses are collected."""
         # 0667    Compass in Inventory        One bit per level
@@ -444,9 +525,9 @@ class Zelda1Env(NESEnv):
             self._frame_advance(0)
 
     # MARK: Reward Function
-    
+
     def _check_objective_completed(self):
-        """Used to retrieve _sword from within the self._objective_goal_check list"""
+        """Used to check whether the current objective has been completed."""
         _function_name = self._objective_goals[self._objective]
         if _function_name != -1:
             if eval(_function_name) == self._objective_list[self._objective][-1]:
@@ -457,36 +538,76 @@ class Zelda1Env(NESEnv):
 
         return False
 
-    def _get_target_distance(self):
-        """Returns the absolute distance between Link and the current target."""
-        return ((self._x_pixel - self._objective_list[self._objective][0])**2 + (self._y_pixel - self._objective_list[self._objective][1])**2)**.5
+    def _get_target_distance(self, _x_i = None, _y_i = None):
+        """Returns the absolute distance between Link and the current target, or a specified target."""
+        if _x_i == None:
+            _x_i = self._objective_list[self._objective][1]
+        if _y_i == None:
+            _y_i = self._objective_list[self._objective][2]
+
+        return ((self._x_pixel - _x_i)**2 + (self._y_pixel - _y_i)**2)**.5
 
     def _objective_cleared(self):
         """Return reward for a cleared objective."""
-        self._objective += 1
         self._target_distance_last = self._get_target_distance()
+        self._objective += 1
         print("Objective", self._objective, "completed!")
+        print("(", self._x_pixel, ",", self._y_pixel, ")")
         return 15
 
-    def _objective_reward(self):
-        """Return the reward based on the distance from a target location."""
-        _reward = 0
-        if self._check_objective_completed():
-                return self._objective_cleared()
-        else:
-            _target_distance = self._get_target_distance()
-            _difference = _target_distance - self._target_distance_last
-            _reward = 3 * math.atan(_difference)
-            self._target_distance_last = _target_distance
-            if abs(_difference) > 10:
-                _reward = 0
+    def _map_location_penalty(self):
+        if self._objective_list[self._objective][-2] != self._map_location:
+            return -10
 
-        return _reward
+        return 0
+
+    def _objective_reward(self):
+        """Return the reward based on the progress towards the current objective."""
+        if self._objective_list[self._objective][0] == OBJECTIVE_TYPE[0]:
+            if self._objective >= len(self._objective_list):
+                return 0
+
+            if self._check_objective_completed():
+                return self._objective_cleared()
+            else:
+                if self._map_location_penalty() < 0:
+                    return 0
+
+                _target_distance = self._get_target_distance()
+                _difference = _target_distance - self._target_distance_last
+                _reward = 3 * math.atan(_difference)
+                self._target_distance_last = _target_distance
+                if abs(_difference) > 10:
+                    return 0
+
+                return _reward
+
+        elif self._objective_list[self._objective][0] == OBJECTIVE_TYPE[1]:
+            if self._objective_list[self._objective][-1] == self._killed_enemy_count:
+                return self._objective_cleared()
+            _closest_enemy_distance = 0
+            for i in range(self._objective_list[self._objective][-1]):
+                _function_name_x = "self._enemy_" + str(i+1) + "_x_pixel"
+                _function_name_y = "self._enemy_" + str(i+1) + "_y_pixel"
+                _enemy_distance = self._get_target_distance(eval(_function_name_x), eval(_function_name_y))
+                if _enemy_distance < _closest_enemy_distance:
+                    _closest_enemy_distance = _enemy_distance
+
+            _difference = self._closest_enemy_distance_last - _closest_enemy_distance
+            self._closest_enemy_distance_last = _closest_enemy_distance
+            if self._killed_enemy_count_last == self._killed_enemy_count:
+                return math.atan(_difference)
+
+        return 0
+
+    def _distance_penalty(self):
+        _penalty = -self._get_target_distance()/50
+        return _penalty
 
     # def _exploration_reward(self):
     #     """Return the reward for exploring the map."""
-    #     # The area where Link's _x_pixel can be is approximately 240*160 pixels (x:0-240, y:61-221).
-    #     # This maps to a (10, 15) matrix of 0's and 1's according to where Link has explored.
+    #     # The area where Link can be is approximately 255*175 pixels (x:0-255, y:64-239).
+    #     # If we divide these dimensions by 16, we get a (16, 11) matrix which will represent each position Link can be in.
     #     _reward = 0
     #     _height = 10
     #     _width = 15
@@ -526,7 +647,7 @@ class Zelda1Env(NESEnv):
         if self._killed_enemy_count < self._killed_enemy_count_last:
             return 0
 
-        _reward = 5 * (self._killed_enemy_count - self._killed_enemy_count_last)
+        _reward = 10 * (self._killed_enemy_count - self._killed_enemy_count_last)
         self._killed_enemy_count_last = self._killed_enemy_count
         return _reward
 
@@ -577,11 +698,11 @@ class Zelda1Env(NESEnv):
 
     def _will_reset(self):
         """Handle and RAM hacking before a reset occurs."""
-        self._memory_testing_last = None
         self._objective = 0
         self._health_last = 3.
         self._rupees_last = 0
         self._killed_enemy_count_last = 0
+        self._closest_enemy_distance_last = 0
         self._x_pixel_last = 0
         self._y_pixel_last = 0
         self._sword_last = SWORD_TYPES[0]
@@ -594,7 +715,11 @@ class Zelda1Env(NESEnv):
         """Handle any RAM hacking after a reset occurs."""
         self._x_pixel_last = self._x_pixel
         self._y_pixel_last = self._y_pixel
-        self._target_distance_last = self._get_target_distance()
+        if self._give_rewards:
+            self._target_distance_last = self._get_target_distance()
+        if self._start_in_level_1:
+            self.ram[0xEB] = 55
+            self.ram[0x0657] = 1
 
     def _did_step(self, done):
         """
@@ -615,24 +740,30 @@ class Zelda1Env(NESEnv):
         self._skip_boring_actions()
         self._skip_inventory_scroll()
         self._steps += 1
-        # if self._memory_testing != self._memory_testing_last:
-        #     print("Memory testing:", self._memory_testing)
-        #     self._memory_testing_last = self._memory_testing
+        if self._map_location != self._map_location_last:
+            self._killed_enemy_count_last = 0
+            self._map_location_last = self._map_location
 
     def _get_reward(self):
         """Return the reward after a step occurs."""
-        # TODO: define a default reward function
-        return self._objective_reward() +\
-               self._health_reward() +\
-               self._rupee_reward() +\
-               self._kill_reward() +\
-               self._loitering_penalty() +\
-               self._death_penalty()
+        if self._give_rewards:
+            return self._objective_reward() +\
+                   self._health_reward() +\
+                   self._rupee_reward() +\
+                   self._kill_reward() +\
+                   self._loitering_penalty() +\
+                   self._map_location_penalty() +\
+                   self._distance_penalty() +\
+                   self._death_penalty()
+        else:
+            return 0
 
     def _get_done(self):
         """Return True if the episode is over, False otherwise."""
+        if not self._done_after_objectives_completed:
+            return False
 
-        if self._objective == len(self._objective_location):
+        if self._objective == len(self._objective_list):
             return True
 
         if self._steps >= self._max_steps_per_objective * (self._objective + 1) + self._max_steps_per_objective * self._objective:
@@ -643,6 +774,8 @@ class Zelda1Env(NESEnv):
     def _get_info(self):
         """Return the info after a step occurs"""
         return dict(
+            memory_testing=self._memory_testing,
+            objective=self._objective,
             target_distance=self._target_distance_last,
             current_level=self._current_level,
             x_pos=self._x_pixel,
@@ -685,3 +818,4 @@ class Zelda1Env(NESEnv):
 
 # explicitly define the outward facing API of this module
 __all__ = [Zelda1Env.__name__]
+

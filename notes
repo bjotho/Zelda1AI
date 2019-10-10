@@ -1,0 +1,15 @@
+Make the (main) objective as simple as possible!!!
+
+Split agent algorithm into two separate objective handlers:
+    - pathfinding algorithm (A*) --> ℵ* (aleph*)
+    - environment exploration algorithm
+
+
+1. Use ℵ* to move within one map location.
+2. Treat overworld map as a node network.
+3. Discover nodes during exploration and save in node graph.
+4. Use A* algorithm to navigate overworld node graph.
+(5. Use ConvNet to determine if goal node is reached.)
+5. Hard code goal node (map location).
+
+

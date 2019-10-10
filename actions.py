@@ -28,3 +28,4 @@ MOVEMENT = [
     # ['down', 'B'],
     # ['down', 'A', 'B'],
 ]
+

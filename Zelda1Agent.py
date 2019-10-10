@@ -1,8 +1,121 @@
 from nes_py.wrappers import JoypadSpace
 import gym_zelda_1
 from gym_zelda_1.actions import MOVEMENT
+
+from keras.models import Sequential
+from keras.layers import Dense, Dropout, Conv2D, MaxPooling2D, Activation, Flatten
+from keras.optimizers import Adam
+from keras.callbacks import TensorBoard
+import tensorflow as tf
+
+from collections import deque
 import numpy as np
-from random import randint
+import time
+import random
+
+
+# Own Tensorboard class
+class ModifiedTensorBoard(TensorBoard):
+
+    # Overriding init to set initial step and writer (we want one log file for all .fit() calls)
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.step = 1
+        self.writer = tf.summary.FileWriter(self.log_dir)
+
+    # Overriding this method to stop creating default log writer
+    def set_model(self, model):
+        pass
+
+    # Overrided, saves logs with our step number
+    # (otherwise every .fit() will start writing from 0th step)
+    def on_epoch_end(self, epoch, logs=None):
+        self.update_stats(**logs)
+
+    # Overrided, we train for one batch only, no need to save anything at epoch end
+    def on_batch_end(self, _, logs=None):
+        pass
+
+    # Overrided, so won't close writer
+    def on_train_end(self, _):
+        pass
+
+    # Custom method for saving own metrics
+    # Creates writer, writes custom metrics and closes writer
+    def update_stats(self, **stats):
+        self._write_logs(stats, self.step)
+
+
+class DQNAgent:
+    def __init__(self):
+
+        # Main model. This gets trained every step.
+        self.model = self.create_model()
+
+        # Target model. This is what we .predict against every step.
+        self.target_model = self.create_model()
+        self.target_model.set_weights(self.model.get_weights())
+
+        self.replay_memory = deque(maxlen=REPLAY_MEMORY_SIZE)
+        self.tensorboard = ModifiedTensorBoard(log_dir=f"logs/{MODEL_NAME}-{int(time.time())}")
+        self.target_update_counter = 0
+
+    def create_model(self):
+        model = Sequential()
+        # model.add(Conv2D(256, (3, 3), input_shape=(176, 256, 3)))
+        model.add(Conv2D(16, (3, 3), input_shape=(dim[0] - (top_crop + (dim[0] - bottom_crop)), dim[1] - (left_crop + (dim[1] - right_crop)), 3)))
+        model.add(Activation("relu"))
+        model.add(MaxPooling2D(2, 2))
+        model.add(Dropout(0.2))
+        model.add(Flatten())
+        model.add(Dense(64))
+        model.add(Dense(env.action_space.n, activation="linear"))
+        model.compile(loss="mse", optimizer=Adam(lr=0.001), metrics=['accuracy'])
+        return model
+
+    def update_replay_memory(self, transition):
+        self.replay_memory.append(transition)
+
+    def get_qs(self, state):
+        return self.model.predict(np.array(state).reshape(-1, *state.shape)/255)[0]
+
+    def train(self, terminal_state, step):
+        if len(self.replay_memory) < MIN_REPLAY_MEMORY_SIZE:
+            return
+
+        minibatch = random.sample(self.replay_memory, MINIBATCH_SIZE)
+
+        current_states = np.array([transition[0] for transition in minibatch])/255
+        current_qs_list = self.model.predict(current_states)
+
+        new_current_states = np.array([transition[3] for transition in minibatch])/255
+        future_qs_list = self.target_model.predict(new_current_states)
+
+        X = []
+        Y = []
+
+        for index, (current_state, action, reward, new_current_states, done) in enumerate(minibatch):
+            if not done:
+                max_future_Q = np.max(future_qs_list[index])
+                new_Q = reward + DISCOUNT * max_future_Q
+            else:
+                new_Q = reward
+
+            current_qs = current_qs_list[index]
+            current_qs[action] = new_Q
+
+            X.append(current_state)
+            Y.append(current_qs)
+
+        self.model.fit(np.array(X)/255, np.array(Y), batch_size=MINIBATCH_SIZE, verbose=0, shuffle=False, callbacks=[self.tensorboard] if terminal_state else None)
+
+        # Updating to determine if we want to update target_model yet.
+        if terminal_state:
+            self.target_update_counter += 1
+
+        if self.target_update_counter > UPDATE_TARGET_EVERY:
+            self.target_model.set_weights(self.model.get_weights())
+            self.target_update_counter = 0
 
 
 def read_NES_palette():
@@ -18,240 +131,133 @@ def read_NES_palette():
     return palette
 
 
+def go_to_start():
+    if start_in_level_1:
+        # Go get sword for agent
+        a = []
+        for i in range(30):
+            a.append(5)     # up
+        for i in range(45):
+            a.append(4)     # left
+        for i in range(30):
+            a.append(5)     # up
+        # for i in range(120):
+        #     a.append(5)     # up
+        # for i in range(70):
+        #     a.append(4)     # left
+        # for i in range(38):
+        #     a.append(5)     # up
+        # for i in range(30):
+        #     a.append(4)     # left
+
+        global highest_objective
+        # global Q
+        # Start x and y pos: (120, 141)
+        for step in range(len(a)):
+            if step < len(a) - 1:
+                state, reward, done, info = env.step(a[step])
+                # if highest_objective < info['objective']:
+                    # Q = np.append(Q, np.random.uniform(low=-15, high=15, size=([1, 16, 11, len(MOVEMENT)])), axis=0)
+                    # highest_objective = info['objective']
+            else:
+                state, reward, done, info = env.step(0)
+            # env.render()
+        # print("Agent taking over")
+
+
 def get_discrete_state(state):
     x_i = state[0] // 16
     y_i = (state[1] - 61) // 16
-    if x_i == 15:
-        x_i -= 1
-    if y_i == 10:
-        y_i -= 1
     return tuple((x_i, y_i))
 
 
-def model_output(input):
-    global model
-    return np.argmax(model.predict(np.array([input]))[0])
+def discrete_observation(state, left_crop=0, top_crop=0, right_crop=None, bottom_crop=None):
+    """Basically crops the input image (state) to the specified pixels"""
+    observation = []
+    for i in state[top_crop:(bottom_crop if bottom_crop < dim[0] else None)]:
+        observation.append([])
+        for j in i[left_crop:(right_crop if right_crop < dim[1] else None)]:
+            observation[-1].append([])
+            for k in j:
+                observation[-1][-1].append(k)
 
+    return np.array(observation)
 
-def build_model():
-    from keras.models import Sequential
-    from keras.layers import Dense, Dropout, Flatten
-    from keras.layers import Conv2D, MaxPooling2D
-    import keras
-
-    global model
-    model = Sequential()
-    i = 0
-    # Input dim: (240,256)
-    model.add(Conv2D(32, kernel_size=(3,3), activation='relu', input_shape=(240,256,3)))
-    print("Input", model.input_shape)
-    # Input dim: (238,254)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(Conv2D(32, kernel_size=(3,3), activation='relu'))
-    # Input dim: (236,252)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(MaxPooling2D(pool_size=(2,2)))
-    # Input dim: (118,126)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(Conv2D(32, kernel_size=(3,3), activation='relu'))
-    # Input dim: (116,124)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(Conv2D(32, kernel_size=(3,3), activation='relu'))
-    # Input dim: (114,122)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(MaxPooling2D(pool_size=(2,2)))
-    # Input dim: (57,61)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(Conv2D(32, kernel_size=(4,4), activation='relu'))
-    # Input dim: (54,58)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(Conv2D(32, kernel_size=(3,3), activation='relu'))
-    # Input dim: (52,56)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(MaxPooling2D(pool_size=(2,2)))
-    # Input dim: (26,28)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(Conv2D(32, kernel_size=(3,3), activation='relu'))
-    # Input dim: (24,26)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(Conv2D(32, kernel_size=(3,3), activation='relu'))
-    # Input dim: (22,24)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(MaxPooling2D(pool_size=(2,2)))
-    # Input dim: (11,12)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(Conv2D(32, kernel_size=(2,3), activation='relu'))
-    # Input dim: (10,10)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(Conv2D(32, kernel_size=(3,3), activation='relu'))
-    # Input dim: (8,8)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(MaxPooling2D(pool_size=(2,2)))
-    # Input dim: (4,4)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(Dropout(0.25))
-    # Input dim: (4,4))
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(Flatten())
-    # Output dim: 512
-    print("Layer", i, model.output_shape)
-    i += 1
-    # model.add(Dense(512, activation='relu'))
-    # print("Layer", i, model.output_shape)
-    # i += 1
-    # model.add((Dropout(0.5)))
-    # print("Layer", i, model.output_shape)
-    # model.add(Dense(env.action_space.n, activation='softmax'))
-    # print("Output", model.output_shape)
-    model.compile(loss='categorical_crossentropy', optimizer='adam')
 
 env = gym_zelda_1.make('Zelda1-v0')
 env = JoypadSpace(env, MOVEMENT)
-# model = None
-# build_model()
-# The area where Link's _x_pixel can be is approximately 240*160 pixels (x:0-240, y:61-221).
-# If we divide these dimensions by 16, we get a (15, 10) matrix For each position Link can be in,
-# he can perform 20 distinct actions. Therefore, the Q matrix will have the dimensions [10,15,20].
-Q = np.random.uniform(low=-15, high=15, size=([15,10,7]))
-# print(Q)
+# The area where Link can be is approximately 255*175 pixels (x:0-255, y:64-239).
+# If we divide these dimensions by 16, we get a (16, 11) matrix. This matrix will represent each discrete position Link can be in,
+# and for each of these discrete positions, he can perform len(MOVEMENT) distinct actions. Therefore, the Q matrix will have the dimensions [11,16,len(MOVEMENT)].
+# Q = np.random.uniform(low=-15, high=15, size=([1, 16, 11, len(MOVEMENT)]))
+# print(Q.shape)
 
-get_sword = 0
+start_in_level_1 = 0
 state = env.reset()
 
-if get_sword:
-    # Go get sword for agent
-    a = []
-    for i in range(45):
-        a.append(8)
-    for i in range(165):
-        a.append(12)
-    for i in range(10):
-        a.append(4)
-    for i in range(200):
-        a.append(16)
+DISCOUNT = 0.99
+REPLAY_MEMORY_SIZE = 50_000 # How many last steps to keep for model training.
+MIN_REPLAY_MEMORY_SIZE = 1_000 # Minimum number of steps in a memory to start training.
+MINIBATCH_SIZE = 1 # How many steps (samples) to use for training.
+UPDATE_TARGET_EVERY = 5 # Terminal states (end of episodes).
+MODEL_NAME = "2x256"
+MIN_REWARD = -1000 # For model save.
+MEMORY_FRACTION = 0.20
 
-    # Start x and y pos: (120, 141)
-    for step in range(len(a)+100):
-        if step < len(a)-1:
-            state, reward, done, info = env.step(a[step])
-        else:
-            if info['y_pos'] < 141:
-                state, reward, done, info = env.step(16)
-            elif info['x_pos'] < 120:
-                state, reward, done, info = env.step(4)
-            else:
-                state, reward, done, info = env.step(0)
-        env.render()
-    print("Agent taking over")
+# Environment settings.
+EPISODES = 100
 
-LEARNING_RATE = 0.1
-DISCOUNT = 0.95
-EPISODES = 20000
-epsilon = 0.5
-START_EPSILON_DECAYING = 1
-END_EPSILON_DECAYING = EPISODES // 2
-epsilon_decay_value = epsilon / (END_EPSILON_DECAYING - START_EPSILON_DECAYING)
+# Exploration settings.
+epsilon = 1 # Not a constant, will decay.
+EPSILON_DECAY = 0.99975
+MIN_EPSILON = 0.001
+
+# Stats settings.
+AGGREGATE_STATS_EVERY = 1 # Episodes.
+SHOW_PREVIEW = True
+
+dim = (240, 256) # Dimensions of the state image.
+left_crop = 0
+top_crop = 0
+right_crop = dim[1]
+bottom_crop = dim[0]
+agent = DQNAgent()
+
+if go_to_start:
+    go_to_start()
+
 for ep in range(EPISODES):
+    agent.tensorboard.step = ep
     min_reward = 15
     max_reward = -15
-    t = 0
+    step = 1
     state = env.reset()
+    info = None
+    observation = state #discrete_observation(state, x_cutoff_start, y_cutoff_start, x_cutoff_end, y_cutoff_end) # Remove "status bar" from observation
+    # print("observation.shape:", observation.shape)
     done = False
-    state, reward, done, info = env.step(0)
-    discrete_state = get_discrete_state((info['x_pos'], info['y_pos']))
     while not done:
-        if np.random.random() < epsilon:
+        if np.random.random() < epsilon: # Decide whether to perform random action according to epsilon
             action = env.action_space.sample()
         else:
-            action = np.argmin(Q[get_discrete_state((info['x_pos'], info['y_pos']))])
-        new_state, reward, done, info = env.step(action)
-        new_discrete_state = get_discrete_state((info['x_pos'], info['y_pos']))
-        if ep % 1 == 0:
+            action = np.argmax(agent.get_qs(observation))
+        state, reward, done, info = env.step(action)
+        new_observation = state #discrete_observation(state, x_cutoff_start, y_cutoff_start, x_cutoff_end, y_cutoff_end)
+        # x_cutoff_start = info['x_pos'] - 32
+        # y_cutoff_start = info['y_pos'] - 32
+        # x_cutoff_end = info['x_pos'] + 32
+        # y_cutoff_end = info['y_pos'] + 32
+        if SHOW_PREVIEW and not ep % AGGREGATE_STATS_EVERY:
             env.render()
-        if not done:
-            max_future_Q = np.max(Q[new_discrete_state[0]][new_discrete_state[1]])
-            current_Q = Q[discrete_state[0]][discrete_state[1]][action]
-            new_Q = (1 - LEARNING_RATE) * current_Q + LEARNING_RATE * (reward + DISCOUNT * max_future_Q)
-            Q[discrete_state[0]][discrete_state[1]][action] = new_Q
-        discrete_state = new_discrete_state
+        agent.update_replay_memory((observation, action, reward, new_observation, done))
+        agent.train(done, step)
+        observation = new_observation
+        step += 1
         if reward < min_reward:
             min_reward = reward
         if reward > max_reward:
             max_reward = reward
-        t += 1
-    if END_EPSILON_DECAYING >= t >= START_EPSILON_DECAYING:
-        epsilon -= epsilon_decay_value
-    print("Episode:", ep+1, "\tmin_reward:", "%.2f" % min_reward, "\tmax_reward:", "%.2f" % max_reward, "\ttarget distance:", "%.2f" % info['target_distance'], "\tepsilon:", "%.2f" % epsilon)
+    print("Episode:", ep + 1, "\tmin_reward:", "%.2f" % min_reward, "\tmax_reward:", "%.2f" % max_reward,
+          "\ttarget distance:", "%.2f" % info['target_distance'], "\tepsilon:", "%.2f" % epsilon)
+
 env.close()
-
-for i in Q:
-    for j in i:
-        print(j)
-
-'''
-timesteps = 10000
-# eta = .628
-# gamma = .9
-# # reward_list = []
-# total_reward = 0
-# observation = model_output(state)
-# for step in range(timesteps):
-#     action = np.argmax(Q[observation] + np.random.randn(1, env.action_space.n) * (1./(step+1)))
-#     state, reward, done, info = env.step(action)
-#     next_observation = model_output(state)
-#     Q[observation][action] = Q[observation][action] + eta * (reward + gamma * np.max(Q[next_observation]) - Q[observation][action])
-#     total_reward += reward
-#     observation = next_observation
-#     if reward > 0.01:
-#         print("Reward:", "%.2f" % total_reward - reward, "-->", "%.2f" % total_reward)
-#     env.render()
-# env.close()
-# 
-# print("Reward sum for all timesteps:", total_reward/timesteps)
-# print("Final Q-table")
-# print(Q)
-# print("Reward list:", reward_list)
-
-
-
-# for step in range(timesteps):
-#     action = np.argmax(model.predict(np.array([state]))[0])
-#     state, reward, done, info = env.step(action)
-#     if reward > 0:
-#         print("action:", action, "reward:", reward, "step:", step)
-#         y = [0 for i in range(env.action_space.n)]
-#         y[action] = 1
-#         model.fit(np.array([state]), np.array([y]), epochs=1, verbose=0)
-#     else:
-#         if reward < 0:
-#             print("action:", action, "penalty:", reward, "step:", step)
-#         y = [0 for i in range(env.action_space.n)]
-#         i = randint(0,env.action_space.n-1)
-#         if i == action:
-#             i = (i+randint(1,env.action_space.n-2)) % env.action_space.n-1
-#         y[i] = 1
-#         model.fit(np.array([state]), np.array([y]), epochs=1, verbose=0)
-#     if step % int(timesteps/10) == 0:
-#         print(int(100*step/timesteps), "%")
-#     env.render()
-# 
-# env.close()
-# 
-# print(model.summary())
-'''
