@@ -1,4 +1,4 @@
 # Zelda1AI
 AI for playing Zelda 1
-Replace the local gym-zelda-1 site packages (if they exist) with the ones in this repository, or just copy them in.
-Path in venv: venv/lib/python3.6/site-packages
+
+zelda_env.py and actions.py must replace the local equivalents of thesse files for the project to work.

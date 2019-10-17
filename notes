@@ -13,3 +13,4 @@ Split agent algorithm into two separate objective handlers:
 5. Hard code goal node (map location).
 
 
+Hypothesis: ACTIONC = number of possible actions for a given state (Node)

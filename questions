@@ -58,3 +58,24 @@ YOLO classification of map square --> derive target location --> reward = -dist(
 Pathfinding algorithm? --> A* (or aleph*)
 
 
+----------------------------------------------------------------------------------------------------------------
+
+If Hθ is the heuristic (i.e. the reward given a state-action pair),
+why is Hθ(S(s)) described as being represented by a deep neural network predicting Q-values?
+
+We need help translating this from julia into python:
+
+# a Node contains the minimum needed to hold the tree structure
+struct Node{ACTIONC}
+    action_ix::Int32 # action index leading to this state
+    parent::Nullable{Node{ACTIONC}}
+    children::Dict{Int32, Node{ACTIONC}}
+    id::Int32
+    function Node(
+                  action_ix::Int32,
+                  parent::Nullable{Node{ACTIONC}},
+                  id::Int32) where ACTIONC
+        children = Dict{Int32, Node{ACTIONC}}()
+        return new{ACTIONC}(action_ix, parent, children, id)
+    end
+end

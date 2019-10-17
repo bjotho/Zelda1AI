@@ -7,18 +7,20 @@ env = JoypadSpace(env, MOVEMENT)
 
 stop_after_a = 1
 a = []
-for i in range(30):
-    a.append(5)     # up
-for i in range(45):
-    a.append(4)     # left
-for i in range(150):
-    a.append(5)     # up
-for i in range(70):
-    a.append(4)     # left
-for i in range(35):
+for i in range(130):
+    a.append(3)     # right
+for i in range(95):
     a.append(5)     # up
 for i in range(30):
     a.append(4)     # left
+for i in range(10):
+    a.append(5)     # up
+for i in range(105):
+    a.append(4)     # left
+for i in range(100):
+    a.append(6)     # down
+
+
 
 # Go to level 1 from beginning.
 # for i in range(45):
@@ -79,7 +81,7 @@ for step in range(10000):
         state, reward, done, info = env.step(spin_attack[step%len(spin_attack)])
         kill_step = step
     # if info['memory_testing'] != memory_testing_last:
-    print("memory testing:", info['memory_testing'], "(", info['x_pos'], ",", info['y_pos'], ")")
+    print("memory testing:", info['map_location'], "(", info['x_pos'], ",", info['y_pos'], ")")
     # memory_testing_last = info['memory_testing']
     # if abs(reward) >= 15:
     #     print("Reward:", "%.2f" % reward, "+", "%.2f" % total_reward, "-->", "%.2f" % (total_reward + reward))
