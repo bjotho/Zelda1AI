@@ -111,11 +111,13 @@ class Zelda1Env(NESEnv):
         super().__init__(ROM_PATH)
         # Define the current objective.
         self._objective = 0
+        # Define the highest reached objective for the current episode.
+        self._highest_objective = 0
         # Define maximum number of steps for each objective before the environment resets.
         self._max_steps_per_objective = 1000
         self._done_after_objectives_completed = True
         self._start_in_level_1 = False
-        self._give_rewards = False
+        self._give_rewards = True
 
         # Define list containing tuples representing objective locations and goals.
         # (OBJECTIVE_TYPE, _x_pixel, _y_pixel, _map_location, goal). (goal = -1 means get to the specified location).
@@ -126,8 +128,8 @@ class Zelda1Env(NESEnv):
         else:
             # self._objective_list = [(OBJECTIVE_TYPE[0],64,77,119,0), (OBJECTIVE_TYPE[0],121,149,119,SWORD_TYPES[1]), (OBJECTIVE_TYPE[0],121,221,119,1), (OBJECTIVE_TYPE[0],120,61,119,103), (OBJECTIVE_TYPE[0],240,140,103,104)]
             # self._objective_goals = ["self._song_type_currently_active", "self._sword", "self._song_type_currently_active", "self._map_location", "self._map_location"]
-            self._objective_list = [(OBJECTIVE_TYPE[0],255,141,119,120), (OBJECTIVE_TYPE[0],40,64,120,110)]
-            self._objective_goals = ["self._map_location", "self._map_location"]
+            self._objective_list = [(OBJECTIVE_TYPE[0],240,141,119,120), (OBJECTIVE_TYPE[0],48,61,120,104), (OBJECTIVE_TYPE[0],0,157,104,103), (OBJECTIVE_TYPE[0],120,221,103,119)]
+            self._objective_goals = []
         self._map_location_last = 119
         self._health_last = 3.
         self._rupees_last = 0
@@ -528,8 +530,12 @@ class Zelda1Env(NESEnv):
 
     def _check_objective_completed(self):
         """Used to check whether the current objective has been completed."""
-        _function_name = self._objective_goals[self._objective]
-        if _function_name != -1:
+        _function_name = ""
+        if self._objective >= len(self._objective_goals):
+            _function_name = "self._map_location"
+        else:
+            _function_name = self._objective_goals[self._objective]
+        if _function_name != "":
             if eval(_function_name) == self._objective_list[self._objective][-1]:
                 return True
         else:
@@ -551,9 +557,12 @@ class Zelda1Env(NESEnv):
         """Return reward for a cleared objective."""
         self._target_distance_last = self._get_target_distance()
         self._objective += 1
-        print("Objective", self._objective, "completed!")
-        print("(", self._x_pixel, ",", self._y_pixel, ")")
-        return 15
+        self._highest_objective += 1
+        if self._objective == self._highest_objective:
+            print("Objective", self._objective, "completed!")
+            print("(", self._x_pixel, ",", self._y_pixel, ")")
+
+        return 10
 
     def _map_location_penalty(self):
         if self._objective_list[self._objective][-2] != self._map_location:
@@ -570,6 +579,10 @@ class Zelda1Env(NESEnv):
             if self._check_objective_completed():
                 return self._objective_cleared()
             else:
+                if self._objective > 0 and self._objective_list[self._objective-1][-2] == self._map_location:
+                    self._objective -= 1
+                    return -10
+
                 if self._map_location_penalty() < 0:
                     return 0
 
@@ -699,6 +712,7 @@ class Zelda1Env(NESEnv):
     def _will_reset(self):
         """Handle and RAM hacking before a reset occurs."""
         self._objective = 0
+        self._highest_objective = 0
         self._health_last = 3.
         self._rupees_last = 0
         self._killed_enemy_count_last = 0
@@ -818,4 +832,3 @@ class Zelda1Env(NESEnv):
 
 # explicitly define the outward facing API of this module
 __all__ = [Zelda1Env.__name__]
-

@@ -3,10 +3,10 @@
 
 # actions for movement
 MOVEMENT = [
-    ['NOOP'],
+    # ['NOOP'],
     # ['start'], # to enter and exit inventory
-    ['A'],
-    ['B'],
+    # ['A'],
+    # ['B'],
     # right combinations
     ['right'],
     # ['right', 'A'],
@@ -28,4 +28,3 @@ MOVEMENT = [
     # ['down', 'B'],
     # ['down', 'A', 'B'],
 ]
-
