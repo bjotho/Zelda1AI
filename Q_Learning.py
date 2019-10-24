@@ -187,7 +187,7 @@ for ep in range(EPISODES):
             action = np.argmin(Q[info['objective']][get_discrete_state((info['x_pos'], info['y_pos']))])
         new_state, reward, done, info = env.step(action)
         new_discrete_state = get_discrete_state((info['x_pos'], info['y_pos']))
-        if ep % 1 == 0:
+        if ep % 100 == 0:
             env.render()
         if not done:
             if highest_objective < info['objective']:

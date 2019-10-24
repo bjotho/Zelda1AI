@@ -17,6 +17,7 @@ tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 if tf.__version__ == '2.0.0':
     # Disable eager execution for compatability with tf.compat.v1.summary.FileWriter()
     tf.compat.v1.disable_eager_execution()
+    tf.compat.v1.disable_v2_behavior()
     tf.compat.v1.experimental.output_all_intermediates(True)
 
 
