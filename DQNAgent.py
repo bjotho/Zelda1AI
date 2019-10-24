@@ -17,6 +17,10 @@ tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 # Disable eager execution for compatability with tf.compat.v1.summary.FileWriter()
 tf.compat.v1.disable_eager_execution()
 
+if(tf.__version__ == '2.0.0'):
+    tf.compat.v1.disable_v2_behavior()
+    tf.compat.v1.experimental.output_all_intermediates(True)
+
 DISCOUNT = 0.99
 REPLAY_MEMORY_SIZE = 50_000 # How many last steps to keep for model training.
 MIN_REPLAY_MEMORY_SIZE = 1_000 # Minimum number of steps in a memory to start training.
