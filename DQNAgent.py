@@ -14,6 +14,8 @@ from gym_zelda_1.actions import MOVEMENT
 # Ignore some warnings. Ignorance is bliss.
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
+# Disable eager execution for compatability with tf.compat.v1.summary.FileWriter()
+tf.compat.v1.disable_eager_execution()
 
 DISCOUNT = 0.99
 REPLAY_MEMORY_SIZE = 50_000 # How many last steps to keep for model training.
