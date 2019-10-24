@@ -14,17 +14,10 @@ from gym_zelda_1.actions import MOVEMENT
 # Ignore some warnings. Ignorance is bliss.
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
-# Disable eager execution for compatability with tf.compat.v1.summary.FileWriter()
-tf.compat.v1.disable_eager_execution()
-
-DISCOUNT = 0.99
-REPLAY_MEMORY_SIZE = 50_000 # How many last steps to keep for model training.
-MIN_REPLAY_MEMORY_SIZE = 1_000 # Minimum number of steps in a memory to start training.
-MINIBATCH_SIZE = 1 # How many steps (samples) to use for training.
-UPDATE_TARGET_EVERY = 5 # Terminal states (end of episodes).
-MODEL_NAME = "2x256"
-MIN_REWARD = -1000 # For model save.
-MEMORY_FRACTION = 0.20
+if tf.__version__ == '2.0.0':
+    # Disable eager execution for compatability with tf.compat.v1.summary.FileWriter()
+    tf.compat.v1.disable_eager_execution()
+    tf.compat.v1.experimental.output_all_intermediates(True)
 
 
 # Own Tensorboard class
@@ -62,6 +55,15 @@ class ModifiedTensorBoard(TensorBoard):
 class DQNAgent:
     def __init__(self):
 
+        self.DISCOUNT = 0.99
+        self.REPLAY_MEMORY_SIZE = 50_000  # How many last steps to keep for model training.
+        self.MIN_REPLAY_MEMORY_SIZE = 1_000  # Minimum number of steps in a memory to start training.
+        self.MINIBATCH_SIZE = 1  # How many steps (samples) to use for training.
+        self.UPDATE_TARGET_EVERY = 5  # Terminal states (end of episodes).
+        self.MODEL_NAME = "2x4"
+        self.MIN_REWARD = -1000  # For model save.
+        self.MEMORY_FRACTION = 0.20
+
         self.dim = (240, 256)  # Dimensions of the state image.
         self.left_crop = 0
         self.top_crop = 0
@@ -75,14 +77,14 @@ class DQNAgent:
         self.target_model = self.create_model()
         self.target_model.set_weights(self.model.get_weights())
 
-        self.replay_memory = deque(maxlen=REPLAY_MEMORY_SIZE)
-        self.tensorboard = ModifiedTensorBoard(log_dir=f"logs/{MODEL_NAME}-{int(time.time())}")
+        self.replay_memory = deque(maxlen=self.REPLAY_MEMORY_SIZE)
+        self.tensorboard = ModifiedTensorBoard(log_dir=f"logs/{self.MODEL_NAME}-{int(time.time())}")
         self.target_update_counter = 0
 
     def create_model(self):
         model = Sequential()
         # model.add(Conv2D(256, (3, 3), input_shape=(240, 256, 3)))
-        model.add(Conv2D(1, (3, 3), input_shape=(self.dim[0] - (self.top_crop + (self.dim[0] - self.bottom_crop)), self.dim[1] - (self.left_crop + (self.dim[1] - self.right_crop)), 3)))
+        model.add(Conv2D(4, (3, 3), input_shape=(self.dim[0] - (self.top_crop + (self.dim[0] - self.bottom_crop)), self.dim[1] - (self.left_crop + (self.dim[1] - self.right_crop)), 3)))
         model.add(Activation("relu"))
         model.add(MaxPooling2D(2, 2))
         model.add(Dropout(0.2))
@@ -99,10 +101,10 @@ class DQNAgent:
         return self.model.predict(np.array(state).reshape(-1, *state.shape)/255)[0]
 
     def train(self, terminal_state, step):
-        if len(self.replay_memory) < MIN_REPLAY_MEMORY_SIZE:
+        if len(self.replay_memory) < self.MIN_REPLAY_MEMORY_SIZE:
             return
 
-        minibatch = random.sample(self.replay_memory, MINIBATCH_SIZE)
+        minibatch = random.sample(self.replay_memory, self.MINIBATCH_SIZE)
 
         current_states = np.array([transition[0] for transition in minibatch])/255
         current_qs_list = self.model.predict(current_states)
@@ -116,7 +118,7 @@ class DQNAgent:
         for index, (current_state, action, reward, new_current_states, done) in enumerate(minibatch):
             if not done:
                 max_future_Q = np.max(future_qs_list[index])
-                new_Q = reward + DISCOUNT * max_future_Q
+                new_Q = reward + self.DISCOUNT * max_future_Q
             else:
                 new_Q = reward
 
@@ -126,12 +128,12 @@ class DQNAgent:
             X.append(current_state)
             Y.append(current_qs)
 
-        self.model.fit(np.array(X)/255, np.array(Y), batch_size=MINIBATCH_SIZE, verbose=0, shuffle=False, callbacks=[self.tensorboard] if terminal_state else None)
+        self.model.fit(np.array(X)/255, np.array(Y), batch_size=self.MINIBATCH_SIZE, verbose=0, shuffle=False, callbacks=[self.tensorboard] if terminal_state else None)
 
         # Updating to determine if we want to update target_model yet.
         if terminal_state:
             self.target_update_counter += 1
 
-        if self.target_update_counter > UPDATE_TARGET_EVERY:
+        if self.target_update_counter > self.UPDATE_TARGET_EVERY:
             self.target_model.set_weights(self.model.get_weights())
             self.target_update_counter = 0

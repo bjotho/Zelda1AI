@@ -1,3 +1,0 @@
-[console_scripts]
-gym_zelda_1 = gym_zelda_1._app.cli:main
-

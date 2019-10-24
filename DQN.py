@@ -5,6 +5,8 @@ from gym_zelda_1.actions import MOVEMENT
 from DQNAgent import DQNAgent
 
 import numpy as np
+import time
+import os
 
 
 def read_NES_palette():
@@ -93,6 +95,10 @@ state = env.reset()
 # MIN_REWARD = -1000 # For model save.
 # MEMORY_FRACTION = 0.20
 
+# Create models folder
+if not os.path.isdir('models'):
+    os.makedirs('models')
+
 # Environment settings.
 EPISODES = 100
 
@@ -104,6 +110,7 @@ MIN_EPSILON = 0.001
 # Stats settings.
 AGGREGATE_STATS_EVERY = 1 # Episodes.
 SHOW_PREVIEW = True
+ep_rewards = []
 
 dim = (240, 256) # Dimensions of the state image.
 left_crop = 0
@@ -117,8 +124,9 @@ if go_to_start:
 
 for ep in range(EPISODES):
     agent.tensorboard.step = ep
-    min_reward = 15
-    max_reward = -15
+    min_ep_reward = 15
+    max_ep_reward = -15
+    ep_reward = 0
     step = 1
     state = env.reset()
     info = None
@@ -132,21 +140,34 @@ for ep in range(EPISODES):
             action = np.argmin(agent.get_qs(observation))
         state, reward, done, info = env.step(action)
         new_observation = state #discrete_observation(state, x_cutoff_start, y_cutoff_start, x_cutoff_end, y_cutoff_end)
-        # x_cutoff_start = info['x_pos'] - 32
-        # y_cutoff_start = info['y_pos'] - 32
-        # x_cutoff_end = info['x_pos'] + 32
-        # y_cutoff_end = info['y_pos'] + 32
-        if SHOW_PREVIEW and not ep % AGGREGATE_STATS_EVERY:
+        if SHOW_PREVIEW and not ep % 1:
             env.render()
         agent.update_replay_memory((observation, action, reward, new_observation, done))
         agent.train(done, step)
         observation = new_observation
         step += 1
-        if reward < min_reward:
+        if reward < min_ep_reward:
             min_reward = reward
-        if reward > max_reward:
+        if reward > max_ep_reward:
             max_reward = reward
-    print("Episode:", ep + 1, "\tmin_reward:", "%.2f" % min_reward, "\tmax_reward:", "%.2f" % max_reward,
+    # Append episode reward to a list and log stats (every given number of episodes)
+    ep_rewards.append(ep_reward)
+    if not ep % AGGREGATE_STATS_EVERY or ep == 1:
+        average_reward = sum(ep_rewards[-AGGREGATE_STATS_EVERY:]) / len(ep_rewards[-AGGREGATE_STATS_EVERY:])
+        min_reward = min(ep_rewards[-AGGREGATE_STATS_EVERY:])
+        max_reward = max(ep_rewards[-AGGREGATE_STATS_EVERY:])
+        agent.tensorboard.update_stats(reward_avg=average_reward, reward_min=min_reward, reward_max=max_reward, epsilon=epsilon)
+
+    # Save model, but only when min reward is greater or equal a set value
+    if min_reward >= agent.MIN_REWARD:
+        agent.model.save(
+            f'models/{agent.MODEL_NAME}__{max_reward:_>7.2f}max_{average_reward:_>7.2f}avg_{min_reward:_>7.2f}min__{int(time.time())}.model')
+
+    print("Episode:", ep + 1, "\tmin_ep_reward:", "%.2f" % min_ep_reward, "\tmax_ep_reward:", "%.2f" % max_ep_reward,
           "\ttarget distance:", "%.2f" % info['target_distance'], "\tepsilon:", "%.2f" % epsilon)
+    # Decay epsilon
+    if epsilon > MIN_EPSILON:
+        epsilon *= EPSILON_DECAY
+        epsilon = max(MIN_EPSILON, epsilon)
 
 env.close()
