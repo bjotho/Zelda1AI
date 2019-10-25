@@ -161,8 +161,8 @@ for ep in range(EPISODES):
         max_reward = max(ep_rewards[-AGGREGATE_STATS_EVERY:])
         agent.tensorboard.update_stats(reward_avg=average_reward, reward_min=min_reward, reward_max=max_reward, epsilon=epsilon)
 
-        # Save model, but only when min reward is greater or equal a set value
-        if min_reward >= agent.MIN_REWARD:
+        # Save model, but only when min reward is greater or equal a set value or a certain amount of episodes has passed
+        if min_reward >= agent.MIN_REWARD or not ep % 100:
             average_reward = "%.2f" % average_reward
             min_reward = "%.2f" % min_reward
             max_reward = "%.2f" % max_reward

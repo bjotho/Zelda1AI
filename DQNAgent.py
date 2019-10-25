@@ -63,7 +63,7 @@ class DQNAgent:
         self.UPDATE_TARGET_EVERY = 5  # Terminal states (end of episodes).
         self.CONV_FILTERS = 4
         self.MODEL_NAME = "5x" + str(self.CONV_FILTERS)
-        self.MIN_REWARD = -1000  # For model save.
+        self.MIN_REWARD = -2000  # For model save.
         self.MEMORY_FRACTION = 0.20
 
         self.dim = (240, 256)  # Dimensions of the state image.
@@ -92,7 +92,9 @@ class DQNAgent:
             loaded_model = model_from_json(loaded_model_json)
             # Load weights into new model
             loaded_model.load_weights(f"models/{model}.h5")
+            loaded_model.compile(loss="mse", optimizer=Adam(lr=0.001), metrics=['accuracy'])
             print("Loaded model:", model)
+            loaded_model.summary()
             return loaded_model
 
         model = Sequential()
