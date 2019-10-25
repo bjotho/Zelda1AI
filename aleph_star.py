@@ -134,7 +134,8 @@ class Heap:
 # The tree contains the nodes (describing the structure)
 # and any additional data per node
 class Tree:
-    def __init__(self, gamma, epsilon):
+    def __init__(self, env, gamma, epsilon):
+        self.env = env
         self.gamma = gamma
         self.epsilon = epsilon
         self.running_id = 0
@@ -156,7 +157,7 @@ class Tree:
         return len(node.children) == 0
 
     def all_children_explored(self, node):
-        return len(node.children) == env.action_space.n
+        return len(node.children) == self.env.action_space.n
 
     def all_children_done(self, node):
         done = self.all_children_explored(node)
@@ -239,14 +240,14 @@ class Tree:
         self.dones[0] = self.all_children_done(self.root)
 
     def expand(self, parent_node, action_ix):
-        state, reward, ep_done, info = env.step(action_ix)
-        env.render()
+        state, reward, ep_done, info = self.env.step(action_ix)
+        self.env.render()
         if ep_done:
             self.objective = 0
             self.ep_done = True
         done = self.check_objective_completed(info['objective'], ep_done)
         if done:
-            children_qs = np.zeros(env.action_space.n)
+            children_qs = np.zeros(self.env.action_space.n)
         else:
             children_qs = agent.get_qs(state)
         self.add_node(parent_node, action_ix)
@@ -285,7 +286,7 @@ class Tree:
         # Add new nodes in a loop
         for i in range(max_size):
             if self.ep_done:
-                env.reset()
+                self.env.reset()
                 self.ep_done = False
 
             # Root is done or heap is empty
@@ -302,14 +303,14 @@ class Tree:
     def add_node(self, parent=None, action_ix=None):
         if action_ix is None:
             if parent is None:
-                action_ix = env.action_space.sample()
+                action_ix = self.env.action_space.sample()
             else:
                 sibling_actions = list(parent.children.keys())
-                action_ix = env.action_space.sample()
-                if len(sibling_actions) >= env.action_space.n:
+                action_ix = self.env.action_space.sample()
+                if len(sibling_actions) >= self.env.action_space.n:
                     action_ix = len(sibling_actions)
                 while action_ix in sibling_actions:
-                    action_ix = env.action_space.sample()
+                    action_ix = self.env.action_space.sample()
 
         new_node = Node(self.running_id, action_ix, parent)
         if parent is not None:
@@ -357,7 +358,7 @@ HEAP_GC_FRAC = 0.2 # Fraction of used cells before garbage collecting the heap
 gamma = 0.9
 epsilon = 0.25
 agent = DQNAgent()
-tree = Tree(gamma, epsilon)
+tree = Tree(env, gamma, epsilon)
 # tree.build_example_tree(1)
 tree.build_tree(5500, state)
 

@@ -1,4 +1,4 @@
-from keras.models import Sequential
+from keras.models import Sequential, model_from_json
 from keras.layers import Dense, Dropout, Conv2D, MaxPooling2D, Activation, Flatten
 from keras.optimizers import Adam
 from keras.callbacks import TensorBoard
@@ -17,7 +17,7 @@ tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 if tf.__version__ == '2.0.0':
     # Disable eager execution for compatability with tf.compat.v1.summary.FileWriter()
     tf.compat.v1.disable_eager_execution()
-    tf.compat.v1.disable_v2_behavior()
+    tf.compat.v1.disable_v2_behaviour()
     tf.compat.v1.experimental.output_all_intermediates(True)
 
 
@@ -54,14 +54,15 @@ class ModifiedTensorBoard(TensorBoard):
 
 
 class DQNAgent:
-    def __init__(self):
+    def __init__(self, model=None):
 
         self.DISCOUNT = 0.99
         self.REPLAY_MEMORY_SIZE = 50_000  # How many last steps to keep for model training.
         self.MIN_REPLAY_MEMORY_SIZE = 1_000  # Minimum number of steps in a memory to start training.
         self.MINIBATCH_SIZE = 1  # How many steps (samples) to use for training.
         self.UPDATE_TARGET_EVERY = 5  # Terminal states (end of episodes).
-        self.MODEL_NAME = "2x4"
+        self.CONV_FILTERS = 4
+        self.MODEL_NAME = "5x" + str(self.CONV_FILTERS)
         self.MIN_REWARD = -1000  # For model save.
         self.MEMORY_FRACTION = 0.20
 
@@ -72,27 +73,58 @@ class DQNAgent:
         self.bottom_crop = self.dim[0]
 
         # Main model. This gets trained every step.
-        self.model = self.create_model()
+        self.model = self.create_model(model)
 
         # Target model. This is what we .predict against every step.
-        self.target_model = self.create_model()
+        self.target_model = self.create_model(model)
         self.target_model.set_weights(self.model.get_weights())
 
         self.replay_memory = deque(maxlen=self.REPLAY_MEMORY_SIZE)
         self.tensorboard = ModifiedTensorBoard(log_dir=f"logs/{self.MODEL_NAME}-{int(time.time())}")
         self.target_update_counter = 0
 
-    def create_model(self):
+    def create_model(self, model):
+        if model is not None:
+            # Load JSON and create model
+            json_file = open(f"models/{model}.json", 'r')
+            loaded_model_json = json_file.read()
+            json_file.close()
+            loaded_model = model_from_json(loaded_model_json)
+            # Load weights into new model
+            loaded_model.load_weights(f"models/{model}.h5")
+            print("Loaded model:", model)
+            return loaded_model
+
         model = Sequential()
         # model.add(Conv2D(256, (3, 3), input_shape=(240, 256, 3)))
-        model.add(Conv2D(4, (3, 3), input_shape=(self.dim[0] - (self.top_crop + (self.dim[0] - self.bottom_crop)), self.dim[1] - (self.left_crop + (self.dim[1] - self.right_crop)), 3)))
+        model.add(Conv2D(self.CONV_FILTERS, (3, 3), input_shape=(self.dim[0] - (self.top_crop + (self.dim[0] - self.bottom_crop)), self.dim[1] - (self.left_crop + (self.dim[1] - self.right_crop)), 3)))
+        model.add(Activation("relu"))
+        model.add(MaxPooling2D(2, 2))
+        model.add(Dropout(0.2))
+        model.add(Conv2D(self.CONV_FILTERS, (3, 3)))
+        model.add(Activation("relu"))
+        model.add(MaxPooling2D(2, 2))
+        model.add(Dropout(0.2))
+        model.add(Conv2D(self.CONV_FILTERS, (3, 3)))
+        model.add(Activation("relu"))
+        model.add(MaxPooling2D(2, 2))
+        model.add(Dropout(0.2))
+        model.add(Conv2D(self.CONV_FILTERS, (3, 3)))
+        model.add(Activation("relu"))
+        model.add(MaxPooling2D(2, 2))
+        model.add(Dropout(0.2))
+        model.add(Conv2D(self.CONV_FILTERS, (3, 3)))
         model.add(Activation("relu"))
         model.add(MaxPooling2D(2, 2))
         model.add(Dropout(0.2))
         model.add(Flatten())
         model.add(Dense(64))
+        # model.add(Activation("relu"))
+        model.add(Dense(32))
+        # model.add(Activation("relu"))
         model.add(Dense(len(MOVEMENT), activation="linear"))
         model.compile(loss="mse", optimizer=Adam(lr=0.001), metrics=['accuracy'])
+        model.summary()
         return model
 
     def update_replay_memory(self, transition):
