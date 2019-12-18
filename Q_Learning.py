@@ -3,106 +3,6 @@ import gym_zelda_1
 from gym_zelda_1.actions import MOVEMENT
 import numpy as np
 
-def build_model():
-    from keras.models import Sequential
-    from keras.layers import Dense, Dropout, Conv2D, MaxPooling2D, Flatten
-
-    model = Sequential()
-    i = 0
-    # Input dim: (240,256)
-    model.add(Conv2D(32, kernel_size=(3,3), activation='relu', input_shape=(240,256,3)))
-    print("Input", model.input_shape)
-    # Input dim: (238,254)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(Conv2D(32, kernel_size=(3,3), activation='relu'))
-    # Input dim: (236,252)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(MaxPooling2D(pool_size=(2,2)))
-    # Input dim: (118,126)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(Conv2D(32, kernel_size=(3,3), activation='relu'))
-    # Input dim: (116,124)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(Conv2D(32, kernel_size=(3,3), activation='relu'))
-    # Input dim: (114,122)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(MaxPooling2D(pool_size=(2,2)))
-    # Input dim: (57,61)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(Conv2D(32, kernel_size=(4,4), activation='relu'))
-    # Input dim: (54,58)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(Conv2D(32, kernel_size=(3,3), activation='relu'))
-    # Input dim: (52,56)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(MaxPooling2D(pool_size=(2,2)))
-    # Input dim: (26,28)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(Conv2D(32, kernel_size=(3,3), activation='relu'))
-    # Input dim: (24,26)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(Conv2D(32, kernel_size=(3,3), activation='relu'))
-    # Input dim: (22,24)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(MaxPooling2D(pool_size=(2,2)))
-    # Input dim: (11,12)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(Conv2D(32, kernel_size=(2,3), activation='relu'))
-    # Input dim: (10,10)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(Conv2D(32, kernel_size=(3,3), activation='relu'))
-    # Input dim: (8,8)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(MaxPooling2D(pool_size=(2,2)))
-    # Input dim: (4,4)
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(Dropout(0.25))
-    # Input dim: (4,4))
-    print("Layer", i, model.output_shape)
-    i += 1
-    model.add(Flatten())
-    # Output dim: 512
-    print("Layer", i, model.output_shape)
-    i += 1
-    # model.add(Dense(512, activation='relu'))
-    # print("Layer", i, model.output_shape)
-    # i += 1
-    # model.add((Dropout(0.5)))
-    # print("Layer", i, model.output_shape)
-    # model.add(Dense(env.action_space.n, activation='softmax'))
-    # print("Output", model.output_shape)
-    model.compile(loss='mse', optimizer='adam')
-
-    return model
-
-
-def read_NES_palette():
-    palette = []
-    with open("NES_Palette.txt", 'r') as f:
-        line = f.readline()
-        while line is not "":
-            palette.append([])
-            rgb_string = [x.strip() for x in line.split(',')]
-            for i in rgb_string:
-                palette[-1].append(int(i))
-            line = f.readline()
-    return palette
-
 
 def go_to_start():
     if start_in_level_1:
@@ -144,19 +44,12 @@ def get_discrete_state(state):
     return tuple((x_i, y_i))
 
 
-def model_output(input):
-    global model
-    return np.argmax(model.predict(np.array([input]))[0])
-
-
 env = gym_zelda_1.make('Zelda1-v0')
 env = JoypadSpace(env, MOVEMENT)
-# model = build_model()
 # The area where Link can be is approximately 255*175 pixels (x:0-255, y:64-239).
 # If we divide these dimensions by 16, we get a (16, 11) matrix. This matrix will represent each discrete position Link can be in,
-# and for each of these discrete positions, he can perform len(MOVEMENT) distinct actions. Therefore, the Q matrix will have the dimensions [11,16,len(MOVEMENT)].
+# and for each of these discrete positions, he can perform len(MOVEMENT) distinct actions. Therefore, the Q matrix will have the dimensions [16,11,len(MOVEMENT)].
 Q = np.random.uniform(low=-15, high=15, size=([1, 16, 11, len(MOVEMENT)]))
-# print(Q.shape)
 
 start_in_level_1 = 0
 state = env.reset()
@@ -164,13 +57,16 @@ state = env.reset()
 LEARNING_RATE = 0.1
 DISCOUNT = 0.95
 EPISODES = 20_000
-epsilon = 0.2
-START_EPSILON_DECAYING = 1
-END_EPSILON_DECAYING = EPISODES // 2
-epsilon_decay_value = epsilon / (END_EPSILON_DECAYING - START_EPSILON_DECAYING)
+
+# Exploration settings.
+epsilon = 0.5 # Not a constant, will decay.
+EPSILON_DECAY = 0.975
+MIN_EPSILON = 0.01
+
 highest_objective = 0
 
 for ep in range(EPISODES):
+    ep_reward = 0
     min_reward = 15
     max_reward = -15
     t = 0
@@ -204,9 +100,16 @@ for ep in range(EPISODES):
             min_reward = reward
         if reward > max_reward:
             max_reward = reward
+        ep_reward += reward
         t += 1
-    print("Episode:", ep + 1, "\tmin_reward:", "%.2f" % min_reward, "\tmax_reward:", "%.2f" % max_reward,
+    print("Episode:", ep + 1, "\tep_reward:", "%.2f" % ep_reward, "\tmin_reward:", "%.2f" % min_reward, "\tmax_reward:", "%.2f" % max_reward,
           "\ttarget distance:", "%.2f" % info['target_distance'], "\tepsilon:", "%.2f" % epsilon)
+
+    # Decay epsilon
+    if epsilon > MIN_EPSILON:
+        epsilon *= EPSILON_DECAY
+        epsilon = max(MIN_EPSILON, epsilon)
+
 env.close()
 
 

@@ -23,37 +23,36 @@ def read_NES_palette():
 
 
 def go_to_start():
-    if start_in_level_1:
-        # Go get sword for agent
-        a = []
-        for i in range(30):
-            a.append(5)     # up
-        for i in range(45):
-            a.append(4)     # left
-        for i in range(30):
-            a.append(5)     # up
-        # for i in range(120):
-        #     a.append(5)     # up
-        # for i in range(70):
-        #     a.append(4)     # left
-        # for i in range(38):
-        #     a.append(5)     # up
-        # for i in range(30):
-        #     a.append(4)     # left
+    # Go get sword for agent
+    a = []
+    for i in range(30):
+        a.append(5)     # up
+    for i in range(45):
+        a.append(4)     # left
+    for i in range(30):
+        a.append(5)     # up
+    # for i in range(120):
+    #     a.append(5)     # up
+    # for i in range(70):
+    #     a.append(4)     # left
+    # for i in range(38):
+    #     a.append(5)     # up
+    # for i in range(30):
+    #     a.append(4)     # left
 
-        global highest_objective
-        # global Q
-        # Start x and y pos: (120, 141)
-        for step in range(len(a)):
-            if step < len(a) - 1:
-                state, reward, done, info = env.step(a[step])
-                # if highest_objective < info['objective']:
-                    # Q = np.append(Q, np.random.uniform(low=-15, high=15, size=([1, 16, 11, len(MOVEMENT)])), axis=0)
-                    # highest_objective = info['objective']
-            else:
-                state, reward, done, info = env.step(0)
-            # env.render()
-        # print("Agent taking over")
+    global highest_objective
+    # global Q
+    # Start x and y pos: (120, 141)
+    for step in range(len(a)):
+        if step < len(a) - 1:
+            state, reward, done, info = env.step(a[step])
+            # if highest_objective < info['objective']:
+                # Q = np.append(Q, np.random.uniform(low=-15, high=15, size=([1, 16, 11, len(MOVEMENT)])), axis=0)
+                # highest_objective = info['objective']
+        else:
+            state, reward, done, info = env.step(0)
+        # env.render()
+    # print("Agent taking over")
 
 
 # def get_discrete_state(state):
@@ -83,9 +82,6 @@ env = JoypadSpace(env, MOVEMENT)
 # Q = np.random.uniform(low=-15, high=15, size=([1, 16, 11, len(MOVEMENT)]))
 # print(Q.shape)
 
-start_in_level_1 = 0
-state = env.reset()
-
 # DISCOUNT = 0.99
 # REPLAY_MEMORY_SIZE = 50_000 # How many last steps to keep for model training.
 # MIN_REPLAY_MEMORY_SIZE = 1_000 # Minimum number of steps in a memory to start training.
@@ -100,15 +96,15 @@ if not os.path.isdir('models'):
     os.makedirs('models')
 
 # Environment settings.
-EPISODES = 1000
+EPISODES = 1_000
 
 # Exploration settings.
 epsilon = 0.5 # Not a constant, will decay.
-EPSILON_DECAY = 0.9975
-MIN_EPSILON = 0.001
+EPSILON_DECAY = 0.995
+MIN_EPSILON = 0.01
 
 # Stats settings.
-AGGREGATE_STATS_EVERY = 10 # Episodes.
+AGGREGATE_STATS_EVERY = 5 # Episodes.
 SHOW_PREVIEW = True
 ep_rewards = []
 
@@ -117,10 +113,16 @@ left_crop = 0
 top_crop = 0
 right_crop = dim[1]
 bottom_crop = dim[0]
+
 # To load existing model, provide model="{model name}" as input to DQNAgent
 agent = DQNAgent()
+# Dfferentiate between training and evaluation
+training = 1
 
-if go_to_start:
+go_to_cave = 0
+state = env.reset()
+
+if go_to_cave:
     go_to_start()
 
 for ep in range(EPISODES):
@@ -141,10 +143,11 @@ for ep in range(EPISODES):
             action = np.argmin(agent.get_qs(observation))
         state, reward, done, info = env.step(action)
         new_observation = state #discrete_observation(state, x_cutoff_start, y_cutoff_start, x_cutoff_end, y_cutoff_end)
-        if SHOW_PREVIEW and not ep % 1:
+        if SHOW_PREVIEW and not ep % 1: #AGGREGATE_STATS_EVERY:
             env.render()
-        agent.update_replay_memory((observation, action, reward, new_observation, done))
-        agent.train(done, step)
+        if training:
+            agent.update_replay_memory((observation, action, reward, new_observation, done))
+            agent.train(done, step)
         observation = new_observation
         step += 1
         ep_reward += reward
@@ -155,20 +158,20 @@ for ep in range(EPISODES):
 
     # Append episode reward to a list and log stats (every given number of episodes)
     ep_rewards.append(ep_reward)
-    if not ep % AGGREGATE_STATS_EVERY or ep == 1:
+    if training and (not ep % AGGREGATE_STATS_EVERY or ep == 1):
         average_reward = sum(ep_rewards[-AGGREGATE_STATS_EVERY:]) / len(ep_rewards[-AGGREGATE_STATS_EVERY:])
         min_reward = min(ep_rewards[-AGGREGATE_STATS_EVERY:])
         max_reward = max(ep_rewards[-AGGREGATE_STATS_EVERY:])
         agent.tensorboard.update_stats(reward_avg=average_reward, reward_min=min_reward, reward_max=max_reward, epsilon=epsilon)
 
-        # Save model, but only when min reward is greater or equal a set value or a certain amount of episodes has passed
-        if min_reward >= agent.MIN_REWARD or not ep % 100:
+        # Save model, but only when min reward is greater or equal a set threshold or a certain amount of episodes has passed
+        if min_reward >= agent.MIN_REWARD or not ep % (1 * AGGREGATE_STATS_EVERY):
             average_reward = "%.2f" % average_reward
             min_reward = "%.2f" % min_reward
             max_reward = "%.2f" % max_reward
             # Serialize model to JSON
             model_json = agent.model.to_json()
-            model_name = f"models/{agent.MODEL_NAME}__{max_reward}max_{average_reward}avg_{min_reward}min__{int(time.time())}"
+            model_name = f"models/{agent.MODEL_NAME}__{int(time.time())}__{max_reward}max_{average_reward}avg_{min_reward}min"
             with open(f"{model_name}.json", 'w') as json_file:
                 json_file.write(model_json)
             # Serialize weights to HDF5

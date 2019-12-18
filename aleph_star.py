@@ -14,14 +14,17 @@ class Node:
         if children is None:
             self.children = {}
         else:
-            self.children = children  # Dictionary {Int, Node}, where each child Node of the current Node is listed
+            self.children = children  # Dictionary {child.action_ix: child Node}, where each child Node of the current Node is listed
+        # if children_qs is None:
+        #     self.children_qs = {}
+        # else:
+        #     self.children_qs = children_qs # Dictionary {child.action_ix: Q-value} of Q-values for each child in self.children.
         self.id = id # Int
         self.action_ix = action_ix # Int corresponding to action (index) leading to this Node
-        #self.R = action_r
-        #self.C = accumulated_past_reward
-        #self.Q = q
         self.parent = parent # Node object referencing Node/state where action_ix leads to current Node
-        # self.done = done
+        # self.state = state # Multidimensional list
+        # self.accumuated_reward = accumulated_reward # Int
+        # self.done = done # Boolean
 
     def add_child(self, node, action_ix):
         self.children[action_ix] = node
@@ -72,18 +75,14 @@ class Heap:
     def __init__(self):
         self.cells = [] # List of HeapCell()
         self.total_used = 0
+        self.HEAP_GC_FRAC = 0.2 # Fraction of used cells before garbage collecting the heap
 
     def get_length(self):
         return len(self.cells) - self.total_used
 
-    # Return the HeapCell with lowest score
-    # NB!!! Julia implementation returns boolean testing if hc1 < hc2
-    def get_lowest(self, hc1, hc2):
-        hc_min = np.argmin([hc1.score, hc2.score])
-        if hc_min == 0:
-            return hc1
-        else:
-            return hc2
+    # Check if hc1.score < hc2.score
+    def is_lower(self, hc1, hc2):
+        return hc1 < hc2
 
     def push(self, score, action_ix, parent_id):
         heapq.heappush(self.cells, HeapCell(False, score, action_ix, parent_id))
@@ -93,7 +92,7 @@ class Heap:
         if self.get_length() == 0:
             print("Cannot pop empty heap!")
             return
-        if (self.total_used / self.get_length()) > HEAP_GC_FRAC:
+        if (self.total_used / self.get_length()) > self.HEAP_GC_FRAC:
             self.garbage_collect()
         while True:
             hc = heapq.heappop(self.cells)
@@ -106,7 +105,7 @@ class Heap:
     def pop_rand(self):
         if self.get_length() == 0:
             print("Cannot randomly pop empty heap!")
-        if (self.total_used / self.get_length()) > HEAP_GC_FRAC:
+        if (self.total_used / self.get_length()) > self.HEAP_GC_FRAC:
             self.garbage_collect()
         while True:
             ix = np.random.randint(0, self.get_length())
@@ -131,8 +130,7 @@ class Heap:
         self.total_used = 0
 
 
-# The tree contains the nodes (describing the structure)
-# and any additional data per node
+# The tree contains the nodes (describing the structure) and any additional data per node
 class Tree:
     def __init__(self, env, gamma, epsilon):
         self.env = env
@@ -143,10 +141,11 @@ class Tree:
         self.heap = Heap()
         self.objective = 0
         self.ep_done = False
-        # These five lists are indexed by node.id (SOA style)
+        # These six lists are indexed by node.id (SOA style)
         self.nodes = [] # List of Node objects
         self.children_qs = [] # 2D List of Q-values for children nodes for each Node
-        self.states = [] # State list
+        self.states = [] # List of game states/images. Contains RGB values for each pixel for each image
+        self.sensors = [] # Sensor list. Each entry contains Link's (x, y) coordinates as well as the current map_location
         self.accumulated_rewards = [] # List of accumulated reward
         self.dones = [] # List of booleans
 
@@ -162,7 +161,7 @@ class Tree:
     def all_children_done(self, node):
         done = self.all_children_explored(node)
         for i in range(len(node.children)):
-            if not self.dones[node.get_child_ix[i].id]:
+            if not self.dones[node.get_child_ix(i).id]:
                 done = False
         return done
 
@@ -177,11 +176,27 @@ class Tree:
 
     def get_best_leaf(self):
         leaf_list = []
-        for i, qs in enumerate(self.children_qs):
-            leaf_list.append(self.accumulated_rewards[i] + self.gamma * qs)
-        return self.nodes[int(np.argmax(leaf_list))]
+        for node in self.nodes:
+            leaf_list.append([])
+            for qs in self.children_qs[node.id][:len(node.children)]:
+                leaf_list[-1].append(self.accumulated_rewards[node.id] + self.gamma * qs)
+        best_child_list = []
+        for i in leaf_list:
+            if len(i) > 0:
+                best_child_list.append(np.max(i))
+            else:
+                best_child_list.append(None)
+        best_child_parent_ix = 0
+        tmp_max = best_child_list[0]
+        for i, q in enumerate(best_child_list):
+            if q is not None:
+                if q > tmp_max:
+                    tmp_max = q
+                    best_child_parent_ix = i
+        best_child = self.nodes[best_child_parent_ix].get_child_ix(np.argmax(leaf_list[best_child_parent_ix]))
+        return best_child
 
-    def get_rank_tree(self):
+    def get_tree_rank(self):
         return self.get_rank(self.get_best_leaf())
 
     def get_accumulated_reward(self):
@@ -219,10 +234,11 @@ class Tree:
             self.dones[node.id] = self.all_children_done(node)
             # Update Q at parent
             parent = node.parent
-            node_reward = self.accumulated_rewards[node.id] - self.accumulated_rewards[parent.id]
+            node_reward = self.accumulated_rewards[node.id] - (self.accumulated_rewards[parent.id] if parent else 0)
             mn = np.mean(self.children_qs[nix]) if self.is_leaf(node) \
                 else float(np.sum(avisitedc[nix].reshape(-1) * self.children_qs[nix])) / float(np.sum(avisitedc[nix]))
-            self.children_qs[parent][node.action_ix] = node_reward + self.gamma * mn
+            if parent:
+                self.children_qs[parent.id][node.action_ix] = node_reward + self.gamma * mn
         # Update root
         self.dones[0] = self.all_children_done(self.root)
 
@@ -235,12 +251,14 @@ class Tree:
             # Update Q at parent
             mx = np.max(self.children_qs[node.id])
             node_reward = self.accumulated_rewards[node.id] - self.accumulated_rewards[parent.id]
-            self.children_qs[parent.id][node.action_ix] = node_reward + self.gamma * mx
+            if parent:
+                self.children_qs[parent.id][node.action_ix] = node_reward + self.gamma * mx
         # Update root
         self.dones[0] = self.all_children_done(self.root)
 
     def expand(self, parent_node, action_ix):
         state, reward, ep_done, info = self.env.step(action_ix)
+        sensors = (info['x_pos'], info['y_pos'], info['map_location'])
         self.env.render()
         if ep_done:
             self.objective = 0
@@ -248,10 +266,13 @@ class Tree:
         done = self.check_objective_completed(info['objective'], ep_done)
         if done:
             children_qs = np.zeros(self.env.action_space.n)
+            return
         else:
             children_qs = agent.get_qs(state)
-        self.add_node(parent_node, action_ix)
+
         accumulated_reward = self.accumulated_rewards[parent_node.id] + reward
+        self.add_node(parent_node, action_ix)
+        self.sensors.append(sensors)
         self.children_qs.append(children_qs)
         self.states.append(state)
         self.accumulated_rewards.append(accumulated_reward)
@@ -268,13 +289,14 @@ class Tree:
 
         return False
 
-    def build_tree(self, max_size, root_state):
+    def build_tree(self, max_size, root_state, root_sensors):
         # Build the root node
         self.add_node()
         self.root = self.nodes[0]
         root_children_qs = agent.get_qs(root_state)
 
         # Update the tree with root
+        self.sensors.append(root_sensors)
         self.children_qs.append(root_children_qs)
         self.states.append(root_state)
         self.accumulated_rewards.append(0.0)
@@ -295,7 +317,9 @@ class Tree:
 
             # Choose parent and action
             action_ix, parent_id = self.heap.pop_max() if np.random.random() > self.epsilon else self.heap.pop_rand()
+            assert not self.dones[parent_id]
             parent = self.nodes[parent_id]
+            # assert action_ix in parent.children.keys()
 
             # Add a new node to the tree
             self.expand(parent, action_ix)
@@ -349,18 +373,120 @@ class Tree:
         return self.root.show_tree()
 
 
+#w,ll = trainit(N, states, qs, LR, batchsize, priorities)
+
+# def trainit(N, states, mqs, lr, batchsize, priorities):
+#     h = np.sort(priorities)[int(np.floor(0.9 * len(priorities)))]
+#     _p = [np.max([h, p]) for p in priorities]
+#     # _at = np.random.choice(priorities, num_of_elements_in_output_list, _p)
+#     tll = 0.0
+#     for j in range(N):
+#         x, y, bix = batchit(states, mqs, batchsize, _p)
+#
+# def batchit(states, qs, batchsize, probabilities):
+#     assert len(qs) > 0
+#     assert len(states) == len(qs)
+#     NACT = len(qs[0])
+#     x = np.zeros(shape=(len(states[0]), len(states[0][0]), 1, batchsize))
+#     y = np.zeros(shape=(NACT, batchsize))
+#     bix = np.random.rand(np.random.choice([i for i in range(batchsize)], 1, p=probabilities), batchsize)
+
 
 env = gym_zelda_1.make('Zelda1-v0')
 env = JoypadSpace(env, MOVEMENT)
 state = env.reset()
+root_sensors = (119, 120, 141)
 
-HEAP_GC_FRAC = 0.2 # Fraction of used cells before garbage collecting the heap
-gamma = 0.9
-epsilon = 0.25
+EPISODES = 1_000
+
+# Tree parameters
+max_tree_size = 500
+epsilon = 0.5
+MIN_EPSILON = 0.01
+fac = 0.995
+gamma = 0.98
+
+# Training parameters
+LR = 0.01
+batchsize = 64
+train_epochs = 20
+max_states = 80_000
+train_when_min = 1_000
+
+# Validation parameter
+val_safey = 1.0
+
+# Experience buffer
+states = []
+qs = []
+priorities = []
+
+# For stats
+rewards = []
+ranks = []
+num_of_done_leaves = []
+num_of_leaves = []
+val_steps = []
+val_rewards = []
+avg_window = 50
+weighted_nodes_threshold = 200
+
 agent = DQNAgent()
-tree = Tree(env, gamma, epsilon)
-# tree.build_example_tree(1)
-tree.build_tree(5500, state)
+
+for ep in range(EPISODES):
+    #### Accumulating tree ###################################################################
+    print("------------------------------------------------------------------\nEpisode", ep+1)
+
+    tree = Tree(env, gamma, epsilon)
+    tree.build_tree(max_tree_size, state, root_sensors)
+    tree.backprop_weighted_q(weighted_nodes_threshold)
+
+    max_rank = tree.get_tree_rank()
+    ranks.append(max_rank)
+    rewards.append(tree.get_accumulated_reward())
+    num_of_done_leaves.append(np.sum([tree.dones[n.id] for n in tree.nodes if tree.is_leaf(n)]))
+    num_of_leaves.append(np.sum([tree.is_leaf(n) for n in tree.nodes]))
+    ixs = [n.id for n in tree.nodes if (not tree.is_leaf(n) or tree.dones[n.id])]
+    for ix in ixs:
+        qs.append(tree.children_qs[ix])
+        states.append(tree.states[ix])
+
+    if len(priorities) == 0:
+        f = 1.0
+    else:
+        f = np.median(priorities)
+
+    for i in (f * np.ones(len(ixs))):
+        priorities.append(i)
+    if len(qs) > max_states:
+        qs = qs[len(qs)-max_states:]
+        states = states[len(states)-max_states:]
+        priorities = priorities[len(priorities)-max_states:]
+
+    #### Training ###########################################################################
+    if len(qs) >= train_when_min:
+        N = round(len(ixs) * train_epochs / batchsize)
+        print("---- training for", N, "iterations ----")
+        agent.trainit(N, states, qs, LR, batchsize, priorities)
+        if epsilon > MIN_EPSILON:
+            epsilon *= fac
+
+    print("Tree stats:\n\tmax_rank:", ranks[-1], "\trewards:", "%.2f" % rewards[-1], "\tdone_leaves:", num_of_done_leaves[-1], "\tleaves:", num_of_leaves[-1])
+    print("General stats:\n\tlen(qs):", len(qs), "\tlen(ixs):", len(ixs), "\tmin(priorities):", np.min(priorities))
+    print(tree)
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # # Environment settings.
