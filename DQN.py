@@ -115,7 +115,7 @@ right_crop = dim[1]
 bottom_crop = dim[0]
 
 # To load existing model, provide model="{model name}" as input to DQNAgent
-agent = DQNAgent(model="5x4__1572781551__-1248.77max_-1248.77avg_-1248.77min")
+agent = DQNAgent()
 # Dfferentiate between training and evaluation
 training = 1
 
