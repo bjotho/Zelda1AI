@@ -9,19 +9,6 @@ import time
 import os
 
 
-def read_NES_palette():
-    palette = []
-    with open("NES_Palette.txt", 'r') as f:
-        line = f.readline()
-        while line is not "":
-            palette.append([])
-            rgb_string = [x.strip() for x in line.split(',')]
-            for i in rgb_string:
-                palette[-1].append(int(i))
-            line = f.readline()
-    return palette
-
-
 def go_to_start():
     # Go get sword for agent
     a = []
@@ -31,65 +18,19 @@ def go_to_start():
         a.append(4)     # left
     for i in range(30):
         a.append(5)     # up
-    # for i in range(120):
-    #     a.append(5)     # up
-    # for i in range(70):
-    #     a.append(4)     # left
-    # for i in range(38):
-    #     a.append(5)     # up
-    # for i in range(30):
-    #     a.append(4)     # left
 
     global highest_objective
-    # global Q
     # Start x and y pos: (120, 141)
     for step in range(len(a)):
         if step < len(a) - 1:
             state, reward, done, info = env.step(a[step])
-            # if highest_objective < info['objective']:
-                # Q = np.append(Q, np.random.uniform(low=-15, high=15, size=([1, 16, 11, len(MOVEMENT)])), axis=0)
-                # highest_objective = info['objective']
         else:
             state, reward, done, info = env.step(0)
         # env.render()
-    # print("Agent taking over")
-
-
-# def get_discrete_state(state):
-#     x_i = state[0] // 16
-#     y_i = (state[1] - 61) // 16
-#     return tuple((x_i, y_i))
-
-
-# def discrete_observation(state, left_crop=0, top_crop=0, right_crop=None, bottom_crop=None):
-#     """Basically crops the input image (state) to the specified pixels"""
-#     observation = []
-#     for i in state[top_crop:(bottom_crop if bottom_crop < dim[0] else None)]:
-#         observation.append([])
-#         for j in i[left_crop:(right_crop if right_crop < dim[1] else None)]:
-#             observation[-1].append([])
-#             for k in j:
-#                 observation[-1][-1].append(k)
-#
-#     return np.array(observation)
 
 
 env = gym_zelda_1.make('Zelda1-v0')
 env = JoypadSpace(env, MOVEMENT)
-# The area where Link can be is approximately 255*175 pixels (x:0-255, y:64-239).
-# If we divide these dimensions by 16, we get a (16, 11) matrix. This matrix will represent each discrete position Link can be in,
-# and for each of these discrete positions, he can perform len(MOVEMENT) distinct actions. Therefore, the Q matrix will have the dimensions [11,16,len(MOVEMENT)].
-# Q = np.random.uniform(low=-15, high=15, size=([1, 16, 11, len(MOVEMENT)]))
-# print(Q.shape)
-
-# DISCOUNT = 0.99
-# REPLAY_MEMORY_SIZE = 50_000 # How many last steps to keep for model training.
-# MIN_REPLAY_MEMORY_SIZE = 1_000 # Minimum number of steps in a memory to start training.
-# MINIBATCH_SIZE = 1 # How many steps (samples) to use for training.
-# UPDATE_TARGET_EVERY = 5 # Terminal states (end of episodes).
-# MODEL_NAME = "2x256"
-# MIN_REWARD = -1000 # For model save.
-# MEMORY_FRACTION = 0.20
 
 # Create models folder
 if not os.path.isdir('models'):

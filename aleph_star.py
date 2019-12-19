@@ -5,6 +5,7 @@ from DQNAgent import DQNAgent
 
 import numpy as np
 import heapq
+import os
 
 
 # a Node contains the minimum needed to hold the tree structure
@@ -15,16 +16,9 @@ class Node:
             self.children = {}
         else:
             self.children = children  # Dictionary {child.action_ix: child Node}, where each child Node of the current Node is listed
-        # if children_qs is None:
-        #     self.children_qs = {}
-        # else:
-        #     self.children_qs = children_qs # Dictionary {child.action_ix: Q-value} of Q-values for each child in self.children.
         self.id = id # Int
         self.action_ix = action_ix # Int corresponding to action (index) leading to this Node
         self.parent = parent # Node object referencing Node/state where action_ix leads to current Node
-        # self.state = state # Multidimensional list
-        # self.accumuated_reward = accumulated_reward # Int
-        # self.done = done # Boolean
 
     def add_child(self, node, action_ix):
         self.children[action_ix] = node
@@ -373,27 +367,13 @@ class Tree:
         return self.root.show_tree()
 
 
-#w,ll = trainit(N, states, qs, LR, batchsize, priorities)
-
-# def trainit(N, states, mqs, lr, batchsize, priorities):
-#     h = np.sort(priorities)[int(np.floor(0.9 * len(priorities)))]
-#     _p = [np.max([h, p]) for p in priorities]
-#     # _at = np.random.choice(priorities, num_of_elements_in_output_list, _p)
-#     tll = 0.0
-#     for j in range(N):
-#         x, y, bix = batchit(states, mqs, batchsize, _p)
-#
-# def batchit(states, qs, batchsize, probabilities):
-#     assert len(qs) > 0
-#     assert len(states) == len(qs)
-#     NACT = len(qs[0])
-#     x = np.zeros(shape=(len(states[0]), len(states[0][0]), 1, batchsize))
-#     y = np.zeros(shape=(NACT, batchsize))
-#     bix = np.random.rand(np.random.choice([i for i in range(batchsize)], 1, p=probabilities), batchsize)
-
-
 env = gym_zelda_1.make('Zelda1-v0')
 env = JoypadSpace(env, MOVEMENT)
+
+# Create models folder
+if not os.path.isdir('models'):
+    os.makedirs('models')
+
 state = env.reset()
 root_sensors = (119, 120, 141)
 

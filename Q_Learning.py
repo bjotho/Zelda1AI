@@ -2,6 +2,7 @@ from nes_py.wrappers import JoypadSpace
 import gym_zelda_1
 from gym_zelda_1.actions import MOVEMENT
 import numpy as np
+import os
 
 
 def go_to_start():
@@ -14,14 +15,6 @@ def go_to_start():
             a.append(1)  # left
         for i in range(150):
             a.append(2)  # up
-        # for i in range(120):
-        #     a.append(5)     # up
-        # for i in range(70):
-        #     a.append(4)     # left
-        # for i in range(38):
-        #     a.append(5)     # up
-        # for i in range(30):
-        #     a.append(4)     # left
 
         global highest_objective
         global Q
@@ -35,7 +28,6 @@ def go_to_start():
             else:
                 state, reward, done, info = env.step(0)
             # env.render()
-        # print("Agent taking over")
 
 
 def get_discrete_state(state):
@@ -46,6 +38,11 @@ def get_discrete_state(state):
 
 env = gym_zelda_1.make('Zelda1-v0')
 env = JoypadSpace(env, MOVEMENT)
+
+# Create models folder
+if not os.path.isdir('Q_tables'):
+    os.makedirs('Q_tables')
+
 # The area where Link can be is approximately 255*175 pixels (x:0-255, y:64-239).
 # If we divide these dimensions by 16, we get a (16, 11) matrix. This matrix will represent each discrete position Link can be in,
 # and for each of these discrete positions, he can perform len(MOVEMENT) distinct actions. Therefore, the Q matrix will have the dimensions [16,11,len(MOVEMENT)].

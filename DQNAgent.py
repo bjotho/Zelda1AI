@@ -128,20 +128,14 @@ class DQNAgent:
         model.add(Dropout(0.2))
         model.add(Flatten()) # this converts our 3D feature map to 1D feature vector
         model.add(Dense(64))
-        # model.add(Activation("relu"))
+        model.add(Activation("relu"))
         model.add(Dense(32))
-        # model.add(Activation("relu"))
+        model.add(Activation("relu"))
         model.add(Dense(16))
-        # model.add(Activation("relu"))
+        model.add(Activation("relu"))
         print(model.output_shape)
-
-        # Here we insert an input vector of shape (2,) directly into the final dense layer
-        input_1 = Input(shape=(model.output_shape[1],))
-        input_2 = Input(shape=(2,))
-        concat = Concatenate(axis=-1)([input_1, input_2])
-        print()
         model.add(Dense(len(MOVEMENT))) # len(MOVEMENT) = number of possible actions
-        model.add(Activation("softmax"))
+        model.add(Activation("linear"))
         model.compile(loss="mse", optimizer=Adam(lr=0.001), metrics=['accuracy'])
         return model
 
