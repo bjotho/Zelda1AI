@@ -61,7 +61,7 @@ class DQNAgent:
         self.DISCOUNT = 0.99
         self.REPLAY_MEMORY_SIZE = 50_000  # How many last steps to keep for model training.
         self.MIN_REPLAY_MEMORY_SIZE = 1_000  # Minimum number of steps in a memory to start training.
-        self.MINIBATCH_SIZE = 1  # How many steps (samples) to use for training.
+        self.MINIBATCH_SIZE = 64  # How many steps (samples) to use for training.
         self.UPDATE_TARGET_EVERY = 5  # Terminal states (end of episodes).
         self.CONV_FILTERS = 4
         self.MODEL_NAME = "5x" + str(self.CONV_FILTERS)
@@ -104,28 +104,28 @@ class DQNAgent:
             print("Loaded model:", model)
             return loaded_model
 
+        # With entire image: input_shape = (240, 256, 3)
         model = Sequential()
-        # model.add(Conv2D(256, (3, 3), input_shape=(240, 256, 3)))
         model.add(Conv2D(self.CONV_FILTERS, (3, 3), input_shape=(self.dim[0] - (self.top_crop + (self.dim[0] - self.bottom_crop)), self.dim[1] - (self.left_crop + (self.dim[1] - self.right_crop)), 3)))
         model.add(Activation("relu"))
         model.add(MaxPooling2D(2, 2))
-        model.add(Dropout(0.2))
+        model.add(Dropout(0.1))
         model.add(Conv2D(self.CONV_FILTERS, (3, 3)))
         model.add(Activation("relu"))
         model.add(MaxPooling2D(2, 2))
-        model.add(Dropout(0.2))
+        model.add(Dropout(0.1))
         model.add(Conv2D(self.CONV_FILTERS, (3, 3)))
         model.add(Activation("relu"))
         model.add(MaxPooling2D(2, 2))
-        model.add(Dropout(0.2))
+        model.add(Dropout(0.1))
         model.add(Conv2D(self.CONV_FILTERS, (3, 3)))
         model.add(Activation("relu"))
         model.add(MaxPooling2D(2, 2))
-        model.add(Dropout(0.2))
+        model.add(Dropout(0.1))
         model.add(Conv2D(self.CONV_FILTERS, (3, 3)))
         model.add(Activation("relu"))
         model.add(MaxPooling2D(2, 2))
-        model.add(Dropout(0.2))
+        model.add(Dropout(0.1))
         model.add(Flatten()) # this converts our 3D feature map to 1D feature vector
         model.add(Dense(64))
         model.add(Activation("relu"))

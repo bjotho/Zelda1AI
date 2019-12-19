@@ -81,7 +81,7 @@ for ep in range(EPISODES):
         if np.random.random() < epsilon: # Decide whether to perform random action according to epsilon
             action = env.action_space.sample()
         else:
-            action = np.argmin(agent.get_qs(observation))
+            action = np.argmax(agent.get_qs(observation))
         state, reward, done, info = env.step(action)
         new_observation = state #discrete_observation(state, x_cutoff_start, y_cutoff_start, x_cutoff_end, y_cutoff_end)
         if SHOW_PREVIEW and not ep % 1: #AGGREGATE_STATS_EVERY:
