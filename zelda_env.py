@@ -114,7 +114,7 @@ class Zelda1Env(NESEnv):
         # Define the highest reached objective for the current episode.
         self._highest_objective = 0
         # Define maximum number of steps for each objective before the environment resets.
-        self._max_steps_per_objective = 1000
+        self._max_steps_per_objective = 500
         self._done_after_objectives_completed = True
         self._start_in_level_1 = False
         self._give_rewards = True
@@ -123,13 +123,17 @@ class Zelda1Env(NESEnv):
         # (OBJECTIVE_TYPE, _x_pixel, _y_pixel, _map_location, goal). (goal = -1 means get to the specified location).
         # Also define list containing properties to check against goals set in _objective_list.
         if self._start_in_level_1:
-            self._objective_list = [(OBJECTIVE_TYPE[0],0,141,115,114), (OBJECTIVE_TYPE[1],114,3), (OBJECTIVE_TYPE[0],152,182,114,1), (OBJECTIVE_TYPE[0],224,141,114,115)]
-            self._objective_goals = ["self._map_location", "self._killed_enemy_count", "self._number_of_keys"]
+            self._objective_list = [(OBJECTIVE_TYPE[0],0,141,115,114)]
+            self._objective_goals = []
         else:
             # self._objective_list = [(OBJECTIVE_TYPE[0],64,77,119,0), (OBJECTIVE_TYPE[0],121,149,119,SWORD_TYPES[1]), (OBJECTIVE_TYPE[0],121,221,119,1), (OBJECTIVE_TYPE[0],120,61,119,103), (OBJECTIVE_TYPE[0],240,140,103,104)]
             # self._objective_goals = ["self._song_type_currently_active", "self._sword", "self._song_type_currently_active", "self._map_location", "self._map_location"]
-            self._objective_list = [(OBJECTIVE_TYPE[0],240,141,119,120), (OBJECTIVE_TYPE[0],48,61,120,104), (OBJECTIVE_TYPE[0],0,157,104,103), (OBJECTIVE_TYPE[0],120,221,103,119)]
+            self._objective_list = [(OBJECTIVE_TYPE[0],240,141,119,120),
+                                    (OBJECTIVE_TYPE[0],48,61,120,104),
+                                    (OBJECTIVE_TYPE[0],0,157,104,103),
+                                    (OBJECTIVE_TYPE[0],120,221,103,119)]
             self._objective_goals = []
+        self._objective_angle = (0, 1)
         self._map_location_last = 119
         self._health_last = 3.
         self._rupees_last = 0
@@ -422,11 +426,6 @@ class Zelda1Env(NESEnv):
         return self.ram[0x066D]
 
     @property
-    def _number_of_keys(self):
-        """Return the number of keys Link has."""
-        return self.ram[0x066E]
-
-    @property
     def _number_of_heart_containers(self):
         """Return the number of total heart containers."""
         return (self.ram[0x066F] >> 4) + 1
@@ -707,6 +706,13 @@ class Zelda1Env(NESEnv):
 
         return 0
 
+    # MARK: additional info dictionary entries
+
+    def _calc_objective_angle(self):
+        _target = (self._objective_list[self._objective][1], self._objective_list[self._objective][2])
+        _rad = math.atan2(_target[1]-self._y_pixel, _target[0]-self._x_pixel)
+        return (math.sin(_rad), math.cos(_rad))
+
     # MARK: nes-py API calls
 
     def _will_reset(self):
@@ -754,6 +760,7 @@ class Zelda1Env(NESEnv):
         self._skip_boring_actions()
         self._skip_inventory_scroll()
         self._steps += 1
+        self._objective_angle = self._calc_objective_angle()
         if self._map_location != self._map_location_last:
             self._killed_enemy_count_last = 0
             self._map_location_last = self._map_location
@@ -761,14 +768,15 @@ class Zelda1Env(NESEnv):
     def _get_reward(self):
         """Return the reward after a step occurs."""
         if self._give_rewards:
-            return self._objective_reward() +\
-                   self._health_reward() +\
-                   self._rupee_reward() +\
-                   self._kill_reward() +\
-                   self._loitering_penalty() +\
-                   self._map_location_penalty() +\
-                   self._distance_penalty() +\
-                   self._death_penalty()
+            return self._objective_reward()
+            # return self._objective_reward() +\
+            #        self._health_reward() +\
+            #        self._rupee_reward() +\
+            #        self._kill_reward() +\
+            #        self._loitering_penalty() +\
+            #        self._map_location_penalty() +\
+            #        self._distance_penalty() +\
+            #        self._death_penalty()
         else:
             return 0
 
@@ -780,7 +788,7 @@ class Zelda1Env(NESEnv):
         if self._objective == len(self._objective_list):
             return True
 
-        if self._steps >= self._max_steps_per_objective * (self._objective + 1) + self._max_steps_per_objective * self._objective:
+        if self._steps >= self._max_steps_per_objective:
             return True
 
         return False
@@ -790,6 +798,7 @@ class Zelda1Env(NESEnv):
         return dict(
             memory_testing=self._memory_testing,
             objective=self._objective,
+            angle=self._objective_angle,
             target_distance=self._target_distance_last,
             current_level=self._current_level,
             x_pos=self._x_pixel,

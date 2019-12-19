@@ -9,11 +9,11 @@ def go_to_start():
         # Go get sword for agent
         a = []
         for i in range(30):
-            a.append(5)  # up
+            a.append(2)  # up
         for i in range(45):
-            a.append(4)  # left
-        for i in range(200):
-            a.append(5)  # up
+            a.append(1)  # left
+        for i in range(150):
+            a.append(2)  # up
         # for i in range(120):
         #     a.append(5)     # up
         # for i in range(70):
@@ -65,6 +65,9 @@ MIN_EPSILON = 0.01
 
 highest_objective = 0
 
+if start_in_level_1:
+    go_to_start()
+
 for ep in range(EPISODES):
     ep_reward = 0
     min_reward = 15
@@ -90,9 +93,9 @@ for ep in range(EPISODES):
                 Q = np.append(Q, np.random.uniform(low=-15, high=15, size=([1, 16, 11, len(MOVEMENT)])), axis=0)
                 highest_objective = info['objective']
             max_future_Q = np.max(Q[(info['objective'],) + new_discrete_state])
-            current_Q = Q[(info['objective'],) + new_discrete_state + (action,)]
+            current_Q = Q[(info['objective'],) + discrete_state + (action,)]
             new_Q = (1 - LEARNING_RATE) * current_Q + LEARNING_RATE * (reward + DISCOUNT * max_future_Q)
-            Q[(info['objective'],) + new_discrete_state + (action,)] = new_Q
+            Q[(info['objective'],) + discrete_state + (action,)] = new_Q
         discrete_state = new_discrete_state
         if ep % 10 == 0:
             np.save(f"Q_tables/Q_{ep}.npy", Q)
